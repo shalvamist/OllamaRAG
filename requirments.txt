@@ -1,0 +1,10 @@
+streamlit
+langchain
+langchain-ollama
+langchain-text-splitters
+langchain-community
+ollama
+asyncio
+uuid
+chromadb
+
