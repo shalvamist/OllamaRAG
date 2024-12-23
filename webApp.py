@@ -319,7 +319,7 @@ with st.sidebar:
 
     st.session_state.system_prompt = st.text_area(
         "Enter System Prompt 👇",
-        value="You are a helpful assistant that translates English to German.",
+        value="You are a helpful assistant.",
     )
 
     st.session_state.temperature = st.slider(
