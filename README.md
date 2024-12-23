@@ -1,6 +1,6 @@
 # 🦙🦜🔗OllamaRAG🔗🦜🦙
 
-OllamaRAg is a Streamlit app leveraging Ollama for local RAG application
+OllamaRAG is a Streamlit app leveraging Ollama for local RAG application
 
 ![banner 1: home screen](img/page.png)
 
