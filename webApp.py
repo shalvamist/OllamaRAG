@@ -268,7 +268,7 @@ initApp()
 updateOllamaModel()
 
 ### Page layout
-st.title("🦙🦜🔗Ollama Chatbot🔗🦜🦙")
+st.title("🦙🦜🔗 OllamaRAG 🔗🦜🦙")
 
 # Display or clear chat messages
 for message in st.session_state.messages:
