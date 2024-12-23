@@ -1,4 +1,4 @@
-streamlit
+streamlit==1.30.0
 langchain
 langchain-ollama
 langchain-text-splitters
@@ -7,4 +7,4 @@ ollama
 asyncio
 uuid
 chromadb
-
+pypdf
