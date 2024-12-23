@@ -7,4 +7,4 @@ OllamaRAg is a Streamlit app leveraging Ollama for local RAG application
 ## Installation
 1. Clone the repo
 2. Install requirments
-3. Run the Streamlit app
+3. Run the Streamlit app - 'streamlit run .\webApp.py'
