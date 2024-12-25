@@ -10,16 +10,7 @@ from langchain_community.document_loaders import PyPDFLoader
 from uuid import uuid4
 import asyncio
 
-## App static variablesq
-SOURCE_PATH = "./sources/"
-DB_PATH = "./chroma_db/"
-
-# Setting the embedding DB
-CHROMA_SETTINGS = Settings(
-    anonymized_telemetry=False,
-    is_persistent=True,
-    allow_reset=True,
-)
+from dbAPI import ChromaDBEmbeddingFunction, CHROMA_SETTINGS, loadDocuments, getClient,SOURCE_PATH, DB_PATH
 
 ## Utility functions
 def initApp():
@@ -47,6 +38,8 @@ def initApp():
     # Define a collection for the RAG workflow
     if 'embedding' not in st.session_state:
         st.session_state.embedding = None
+    if 'context_model' not in st.session_state:
+        st.session_state.context_model = ""
     if 'embeddingModel' not in st.session_state:
         st.session_state.embeddingModel = ""
     if 'ollama_embedding_model' not in st.session_state:
@@ -54,7 +47,7 @@ def initApp():
     if 'collection' not in st.session_state:
         st.session_state.collection = None
     if 'chroma_client' not in st.session_state:
-        st.session_state.chroma_client = chromadb.PersistentClient(path=DB_PATH, settings=CHROMA_SETTINGS)        
+        st.session_state.chroma_client = getClient()       
     if 'docs' not in st.session_state:
         st.session_state.docs = []
     if 'newMaxTokens' not in st.session_state:
@@ -71,7 +64,6 @@ def initApp():
         st.session_state.contextWindow = 2048
     if 'db_ready' not in st.session_state:
         st.session_state.db_ready = False
-    # Store LLM generated responses
     if "messages" not in st.session_state.keys():
         st.session_state.messages = [{"role": "assistant", "content": "How may I assist you today?"}]
 
@@ -86,34 +78,7 @@ def query_chromadb(query_text, n_results=3):
     else:
         return [], []
 
-async def loadDocuments():
-    documents = []
-    doc_ids = []
-    all_splits = []
-
-    text_splitter = RecursiveCharacterTextSplitter(
-        # Set a really small chunk size, just to show.
-        chunk_size=int(st.session_state.chunk_size),
-        chunk_overlap=int(st.session_state.overlap),
-        length_function=len,
-        is_separator_regex=False,
-    )
-    for file in os.listdir(SOURCE_PATH):
-        # print(f'File {file} is being loaded...')
-        with open(os.path.join(SOURCE_PATH, file), 'r') as f:
-            loader = PyPDFLoader(file_path=os.path.join(SOURCE_PATH, file)) 
-            if file not in st.session_state.docs:
-                st.session_state.docs.append(file)
-            async for page in loader.alazy_load():
-                documents.append(page)
-                for x in text_splitter.split_text(page.page_content):
-                    all_splits.append(x)
-            doc_ids.append(file)
-
-    return all_splits
-
 def deleteDB():
-
     # remove sources
     for file in os.listdir(SOURCE_PATH):
         os.remove(os.path.join(SOURCE_PATH, file))
@@ -141,19 +106,20 @@ def updateDB():
         return
     
     # Checking if new files were updated
-    checkSourcesUpdated = False
-    for file in os.listdir(SOURCE_PATH):
-        if file not in st.session_state.docs:
-            checkSourcesUpdated = True
-            break
-
-    if not checkSourcesUpdated:
+    if os.listdir(SOURCE_PATH) == st.session_state.docs:
         st.error("No new sources found. Please upload new sources for DB update.")
         return    
 
     with st.spinner("# Rebuilding DB - Please hold"):    
         # Load the documents
-        all_splits = asyncio.run(loadDocuments())
+        contextLLM = None
+        if st.session_state.context_model != "":
+            contextLLM = OllamaLLM(
+                model=st.session_state.context_model,
+                temperature=0.5,
+                # other params... https://python.langchain.com/api_reference/ollama/llms/langchain_ollama.llms.OllamaLLM.html
+            )
+        all_splits = asyncio.run(loadDocuments(st.session_state.chunk_size,st.session_state.overlap,st.session_state.docs, contextLLM))
 
         st.session_state.embedding = ChromaDBEmbeddingFunction(
             OllamaEmbeddings(
@@ -174,33 +140,7 @@ def updateDB():
         else:
             st.error("No PDF files found in the source folder. Please upload PDF files to proceed.")
             st.session_state.db_ready = False  
-
-class ChromaDBEmbeddingFunction:
-    """
-    Custom embedding function for ChromaDB using embeddings from Ollama.
-    """
-    def __init__(self, langchain_embeddings):
-        self.langchain_embeddings = langchain_embeddings
-
-    def __call__(self, input):
-        # Ensure the input is in a list format for processing
-        if isinstance(input, str):
-            input = [input]
-        return self.langchain_embeddings.embed_documents(input)
-
-# Function to add documents to the ChromaDB collection
-def add_documents_to_collection(documents, ids):
-    """
-    Add documents to the ChromaDB collection.
     
-    Args:
-        documents (list of str): The documents to add.
-        ids (list of str): Unique IDs for the documents.
-    """
-    st.session_state.collection.add(
-        documents=documents,
-        ids=ids
-    )
 # Function to add documents to the ChromaDB collection
 def updateOllamaModel():
     ollama_models = ollama.list()
@@ -373,8 +313,8 @@ with st.sidebar:
             "Select vectorDB overlap size",
             value='200',
         )
-        st.session_state.grading_model = st.selectbox(
-            "Select grading model",
+        st.session_state.context_model = st.selectbox(
+            "Select context generation model",
             st.session_state.dropDown_model_list,
             index=None,
             placeholder = "Select model...",
