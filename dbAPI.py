@@ -1,16 +1,9 @@
-# import streamlit as st
-# import ollama
 import os
-# from langchain_ollama import OllamaEmbeddings, OllamaLLM
-
 import chromadb
 from chromadb.config import Settings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
-# from uuid import uuid4
-# import asyncio
-
-# from webApp import SOURCE_PATH
+from langchain_ollama import OllamaEmbeddings
 
 # Setting the embedding DB
 CHROMA_SETTINGS = Settings(
@@ -73,4 +66,18 @@ async def loadDocuments(chunk_size=1000, overlap=200, docs=[], llmEmbedder=None)
 
 def getClient():
     return chromadb.PersistentClient(path=DB_PATH, settings=CHROMA_SETTINGS) 
+
+def getCollection(embeddingModel, chroma_client, collectionName, collectionDescription):
+    embedding = ChromaDBEmbeddingFunction(
+        OllamaEmbeddings(
+            model=embeddingModel,
+            base_url="http://localhost:11434"  # Adjust the base URL as per your Ollama server configuration
+        )
+    )
+    # Define a collection for the RAG workflow
+    return chroma_client.get_or_create_collection(
+        name=collectionName,
+        metadata={"description": collectionDescription},
+        embedding_function=embedding  # Use the custom embedding function
+    )
 

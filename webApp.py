@@ -1,16 +1,13 @@
 import streamlit as st
-import ollama
+
 import os
-from langchain_ollama import OllamaEmbeddings, OllamaLLM
-
-import chromadb
-from chromadb.config import Settings
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.document_loaders import PyPDFLoader
-from uuid import uuid4
+import time
 import asyncio
+from uuid import uuid4
 
-from dbAPI import ChromaDBEmbeddingFunction, CHROMA_SETTINGS, loadDocuments, getClient,SOURCE_PATH, DB_PATH
+import ollama
+from langchain_ollama import OllamaLLM
+from dbAPI import loadDocuments, getClient, getCollection, SOURCE_PATH, DB_PATH
 
 ## Utility functions
 def initApp():
@@ -25,7 +22,9 @@ def initApp():
         os.mkdir(DB_PATH)
 
     if 'ollama_model' not in st.session_state:
-        st.session_state.ollama_model = ""
+        st.session_state.ollama_model = None
+    if 'chatReady' not in st.session_state:
+        st.session_state.chatReady = False
     if 'dropDown_model_list' not in st.session_state:
         st.session_state.dropDown_model_list = []
     if 'dropDown_embeddingModel_list' not in st.session_state:
@@ -113,7 +112,7 @@ def updateDB():
     with st.spinner("# Rebuilding DB - Please hold"):    
         # Load the documents
         contextLLM = None
-        if st.session_state.context_model != "":
+        if st.session_state.context_model != "" and st.session_state.context_model != None:
             contextLLM = OllamaLLM(
                 model=st.session_state.context_model,
                 temperature=0.5,
@@ -121,18 +120,8 @@ def updateDB():
             )
         all_splits = asyncio.run(loadDocuments(st.session_state.chunk_size,st.session_state.overlap,st.session_state.docs, contextLLM))
 
-        st.session_state.embedding = ChromaDBEmbeddingFunction(
-            OllamaEmbeddings(
-                model=st.session_state.embeddingModel,
-                base_url="http://localhost:11434"  # Adjust the base URL as per your Ollama server configuration
-            )
-        )
-        # Define a collection for the RAG workflow
-        st.session_state.collection = st.session_state.chroma_client.get_or_create_collection(
-            name="rag_collection_demo",
-            metadata={"description": "A collection for RAG with Ollama - Demo1"},
-            embedding_function=st.session_state.embedding  # Use the custom embedding function
-        )
+        st.session_state.collection = getCollection(st.session_state.embeddingModel, st.session_state.chroma_client, "rag_collection_demo", "A collection for RAG with Ollama - Demo1")
+
         uuids = [str(uuid4()) for _ in range(len(all_splits))]
         if len(st.session_state.docs) > 0:
             st.session_state.collection.add(documents=all_splits, ids=uuids)
@@ -172,7 +161,8 @@ def generate_response(prompt_input):
     # Step 1: Retrieve relevant documents from ChromaDB
     retrieved_docs, metadata = query_chromadb(prompt_input)
     if retrieved_docs:
-        context = " ".join(retrieved_docs[0]) 
+        for i, doc in enumerate(retrieved_docs):
+            context += f"Reference document {i + 1}: {doc}\n"
     else:
         st.session_state.db_ready = False  
 
@@ -189,12 +179,14 @@ def generate_response(prompt_input):
             Context: {context}
             Answer:
             """
-    # Create a chain: prompt -> LLM -> output parser
+    # Create a chain: prompt -> LLM 
     response = st.session_state.llm.invoke(prompt)
     return response   
 
 def updateMainOllamaModel():
+    print(st.session_state.ollama_model)
     if st.session_state.ollama_model != None:
+        st.session_state.chatReady = True
         st.session_state.llm = OllamaLLM(
             model=st.session_state.ollama_model,
             temperature=st.session_state.temperature,
@@ -202,6 +194,13 @@ def updateMainOllamaModel():
             num_ctx=st.session_state.contextWindow,
             # other params... https://python.langchain.com/api_reference/ollama/llms/langchain_ollama.llms.OllamaLLM.html
         )
+    else:
+        st.session_state.chatReady = False
+
+def stream_data(data):
+    for word in data.split(" "):
+        yield word + " "
+        time.sleep(0.02)
 
 ### App initialization
 initApp()
@@ -216,17 +215,21 @@ for message in st.session_state.messages:
         st.write(message["content"])
 
 # User-provided prompt
-if prompt := st.chat_input(disabled=st.session_state.ollama_model == ""):
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.write(prompt)
+if prompt := st.chat_input(key="User_prompt"):
+    if st.session_state.ollama_model == None:
+        st.error("Please select an Ollama model to proceed.")
+    else:
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.write(prompt)
 
 # Generate a new response if last message is not from assistant
 if st.session_state.messages[-1]["role"] != "assistant":
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
             response = generate_response(st.session_state.messages[-1]["content"]) 
-            st.write(response) 
+            # st.markdown(response) 
+            st.write_stream(stream_data(response))
     message = {"role": "assistant", "content": response}
     st.session_state.messages.append(message)
 
@@ -239,7 +242,8 @@ with st.sidebar:
         st.session_state.dropDown_model_list,
         index=None,
         placeholder="Select model...",
-    )
+        key="ollama_model_selection"
+    )    
     updateMainOllamaModel()
 
     if len(st.session_state.loaded_model_list) > 0:
@@ -280,7 +284,7 @@ with st.sidebar:
     with col2:
         st.session_state.newMaxTokens = st.text_input(
             "Select new max tokens size",
-            value=128,
+            value=2048,
         )
         st.button("Clear chat history", on_click=clear_chat_history)
 
