@@ -83,3 +83,12 @@ def getCollection(embeddingModel, chroma_client, collectionName, collectionDescr
         embedding_function=embedding  # Use the custom embedding function
     )
 
+def query_chromadb(query_text, n_results=3, collection=None):
+    if collection is not None:
+        results = collection.query(
+            query_texts=[query_text],
+            n_results=n_results
+        )
+        return results["documents"], results["metadatas"]
+    else:
+        return [], []

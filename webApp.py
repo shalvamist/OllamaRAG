@@ -7,7 +7,8 @@ from uuid import uuid4
 
 import ollama
 from langchain_ollama import OllamaLLM
-from dbAPI import loadDocuments, getClient, getCollection, SOURCE_PATH, DB_PATH
+from dbAPI import loadDocuments, getClient, getCollection, query_chromadb, SOURCE_PATH, DB_PATH
+from RAGpipe import generate_response
 
 ## Utility functions
 def initApp():
@@ -65,17 +66,19 @@ def initApp():
         st.session_state.db_ready = False
     if "messages" not in st.session_state.keys():
         st.session_state.messages = [{"role": "assistant", "content": "How may I assist you today?"}]
+        st.session_state.messagesNum = 1
+
 
 # Function to query the ChromaDB collection
-def query_chromadb(query_text, n_results=3):
-    if st.session_state.collection is not None:
-        results = st.session_state.collection.query(
-            query_texts=[query_text],
-            n_results=n_results
-        )
-        return results["documents"], results["metadatas"]
-    else:
-        return [], []
+# def query_chromadb(query_text, n_results=3):
+#     if st.session_state.collection is not None:
+#         results = st.session_state.collection.query(
+#             query_texts=[query_text],
+#             n_results=n_results
+#         )
+#         return results["documents"], results["metadatas"]
+#     else:
+#         return [], []
 
 def deleteDB():
     # remove sources
@@ -157,33 +160,33 @@ def updateLoadedOllamaModel():
 def clear_chat_history():
     st.session_state.messages = [{"role": "assistant", "content": "How may I assist you today?"}]
 
-def generate_response(prompt_input):
-    response = ""
-    context = ""
-    # Step 1: Retrieve relevant documents from ChromaDB
-    retrieved_docs, metadata = query_chromadb(prompt_input)
-    if retrieved_docs:
-        for i, doc in enumerate(retrieved_docs):
-            context += f"Reference document {i + 1}: {doc}\n"
-    else:
-        st.session_state.db_ready = False  
+# def generate_response(prompt_input):
+#     response = ""
+#     context = ""
+#     # Step 1: Retrieve relevant documents from ChromaDB
+#     retrieved_docs, metadata = query_chromadb(prompt_input)
+#     if retrieved_docs:
+#         for i, doc in enumerate(retrieved_docs):
+#             context += f"Reference document {i + 1}: {doc}\n"
+#     else:
+#         st.session_state.db_ready = False  
 
-    if st.session_state.system_prompt == "":
-        prompt = f"""
-            System: You are a helpful assistant. here to answer questions and provide context. Answer as best as you can
-            User Input: {prompt_input}
-            Answer:
-            """
-    else:
-        prompt = f"""
-            System: {st.session_state.system_prompt}
-            Question: {prompt_input}
-            Context: {context}
-            Answer:
-            """
-    # Create a chain: prompt -> LLM 
-    response = st.session_state.llm.invoke(prompt)
-    return response   
+#     if st.session_state.system_prompt == "":
+#         prompt = f"""
+#             System: You are a helpful assistant. here to answer questions and provide context. Answer as best as you can
+#             User Input: {prompt_input}
+#             Answer:
+#             """
+#     else:
+#         prompt = f"""
+#             System: {st.session_state.system_prompt}
+#             Question: {prompt_input}
+#             Context: {context}
+#             Answer:
+#             """
+#     # Create a chain: prompt -> LLM 
+#     response = st.session_state.llm.invoke(prompt)
+#     return response   
 
 def updateMainOllamaModel():
     print(st.session_state.ollama_model)
@@ -196,6 +199,7 @@ def updateMainOllamaModel():
             num_ctx=st.session_state.contextWindow,
             # other params... https://python.langchain.com/api_reference/ollama/llms/langchain_ollama.llms.OllamaLLM.html
         )
+        st.session_state.llm.invoke("Hello") # warmup
     else:
         st.session_state.chatReady = False
 
@@ -204,6 +208,13 @@ def stream_data(data):
         yield word + " "
         time.sleep(0.02)
 
+def updateChatHistory():
+    # Display or clear chat messages
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.empty()
+            st.write(message["content"])
+
 ### App initialization
 initApp()
 updateOllamaModel()
@@ -211,10 +222,7 @@ updateOllamaModel()
 ### Page layout
 st.title("🦙🦜🔗 OllamaRAG 🔗🦜🦙")
 
-# Display or clear chat messages
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.write(message["content"])
+updateChatHistory()
 
 # User-provided prompt
 if prompt := st.chat_input(key="User_prompt"):
@@ -222,6 +230,7 @@ if prompt := st.chat_input(key="User_prompt"):
         st.error("Please select an Ollama model to proceed.")
     else:
         st.session_state.messages.append({"role": "user", "content": prompt})
+        st.session_state.messagesNum = st.session_state.messagesNum + 1
         with st.chat_message("user"):
             st.write(prompt)
 
@@ -229,11 +238,11 @@ if prompt := st.chat_input(key="User_prompt"):
 if st.session_state.messages[-1]["role"] != "assistant":
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
-            response = generate_response(st.session_state.messages[-1]["content"]) 
-            # st.markdown(response) 
-            st.write_stream(stream_data(response))
+            response = generate_response(st.session_state.messages[-1]["content"], st.session_state.collection, st.session_state.db_ready, st.session_state.system_prompt, st.session_state.llm) 
+            msg = st.write_stream(stream_data(response))
     message = {"role": "assistant", "content": response}
     st.session_state.messages.append(message)
+    # st.session_state.messagesNum = st.session_state.messagesNum + 1
 
 ### Sidebar layout
 with st.sidebar:
