@@ -94,6 +94,7 @@ def deleteDB():
         )
         st.session_state.chroma_client.delete_collection("rag_collection_demo")
         st.session_state.chroma_client.reset()
+        st.session_state.db_ready = False
     else:
         st.error("No DataBase is currently running")
 
@@ -115,7 +116,8 @@ def updateDB():
         if st.session_state.context_model != "" and st.session_state.context_model != None:
             contextLLM = OllamaLLM(
                 model=st.session_state.context_model,
-                temperature=0.5,
+                temperature=0.0,
+                num_predict=1000,
                 # other params... https://python.langchain.com/api_reference/ollama/llms/langchain_ollama.llms.OllamaLLM.html
             )
         all_splits = asyncio.run(loadDocuments(st.session_state.chunk_size,st.session_state.overlap,st.session_state.docs, contextLLM))

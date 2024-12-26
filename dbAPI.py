@@ -30,8 +30,6 @@ class ChromaDBEmbeddingFunction:
         return self.langchain_embeddings.embed_documents(input)
 
 async def loadDocuments(chunk_size=1000, overlap=200, docs=[], llmEmbedder=None):
-    documents = []
-    doc_ids = []
     all_splits = []
 
     text_splitter = RecursiveCharacterTextSplitter(
@@ -44,24 +42,28 @@ async def loadDocuments(chunk_size=1000, overlap=200, docs=[], llmEmbedder=None)
     for file in os.listdir(SOURCE_PATH):
         # print(f'File {file} is being loaded...')
         with open(os.path.join(SOURCE_PATH, file), 'r') as f:
-            loader = PyPDFLoader(file_path=os.path.join(SOURCE_PATH, file)) 
             if file not in docs:
+                loader = PyPDFLoader(file_path=os.path.join(SOURCE_PATH, file)) 
                 docs.append(file)
-            async for page in loader.alazy_load():
-                documents.append(page)
-                for x in text_splitter.split_text(page.page_content):
-                    if llmEmbedder is not None:
-                        prompt = f"""
-                            System: You are a helpful AI Embedder, your task is to review text split with the page content and provide addtional context for that text split.
-                            Text Split: {x}
-                            Page Content: {page.page_content}
-                            Context:
-                            """
-                        AI_context = llmEmbedder.invoke(prompt)
-                        x = AI_context + x
-                    all_splits.append(x)
-            doc_ids.append(file)
-
+                async for page in loader.alazy_load():
+                    for split in text_splitter.split_text(page.page_content):
+                        if llmEmbedder is not None:
+                            prompt = f"""
+                                System: 
+                                You are a helpful AI Embedder, Please give a short succinct context to situate this chunk within the overall document for the purposes of improving search retrieval of the chunk. Answer only with the succinct context and nothing else.
+                                Page Content: 
+                                <Document>
+                                {page.page_content}
+                                </Document>
+                                Here is the chunk we want to situate within the whole document - 
+                                <chunk>
+                                {split}                            
+                                </chunk>
+                                Context:
+                                """
+                            AI_context = llmEmbedder.invoke(prompt)
+                            split = f"{split}\n\n{AI_context}"
+                        all_splits.append(split)
     return all_splits
 
 def getClient():
