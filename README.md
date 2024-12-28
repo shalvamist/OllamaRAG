@@ -26,12 +26,20 @@ I am working enabling custom langchain RAG pipes but that work is TBD - at the m
 [Chroma](https://github.com/chroma-core/chroma)
 
 > [!IMPORTANT - Requirments]
+> 
 > You will need Ollama running on your machine - you can find the installation steps here [Ollama download](https://ollama.com/download)
+> Check out the colab link - Installation and run steps are detailed here 👇
 
 ## Colab
 [💡 Google Colab Notebook](https://github.com/shalvamist/OllamaRAG/blob/main/OllamaRAG.ipynb)
 
 ## Installation
 1. Clone the repo
-2. Install requirments
-3. Run the Streamlit app - 'streamlit run .\webApp.py'
+   
+   ```bash git clone https://github.com/shalvamist/OllamaRAG.git```
+3. Install requirments
+
+   ```bash pip install -r OllamaRAG/requirments.txt```
+5. Run the Streamlit app
+  
+   ```bash streamlit run .\webApp.py```
