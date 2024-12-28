@@ -1,6 +1,6 @@
 from dbAPI import query_chromadb, queryBM25
 
-def generate_response(prompt_input, collection=None, db_ready=False, system_prompt="", llm=None, BM25retriver = None):
+def generate_response(prompt_input, collection=None, db_ready=False, system_prompt="", llm=None, BM25retriver = None, dbRetrievalAmount=3):
     response = ""
     context = ""
 
@@ -8,9 +8,9 @@ def generate_response(prompt_input, collection=None, db_ready=False, system_prom
         return response
     
     # Step 1: Retrieve relevant documents from ChromaDB
-    retrieved_docs, metadata = query_chromadb(prompt_input, collection=collection)
+    retrieved_docs, metadata = query_chromadb(prompt_input, collection=collection, n_results=dbRetrievalAmount)
     if BM25retriver is not None:
-        retrieved_docs.append(queryBM25(BM25retriver,prompt_input))
+        retrieved_docs.append(queryBM25(BM25retriver, prompt_input, dbRetrievalAmount))
     if retrieved_docs:
         for i, doc in enumerate(retrieved_docs):
             context += f"Reference document {i + 1}: {doc}\n"

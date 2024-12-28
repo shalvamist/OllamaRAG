@@ -72,7 +72,8 @@ def initApp():
         st.session_state.ContextualBM25RAG = False
     if "BM25retriver" not in st.session_state:
         st.session_state.BM25retriver = None
-
+    if "dbRetrievalAmount" not in st.session_state:
+        st.session_state.dbRetrievalAmount = 3
 
 def deleteDB():
     # remove sources
@@ -117,7 +118,7 @@ def updateDB():
                 num_predict=1000,
                 # other params... https://python.langchain.com/api_reference/ollama/llms/langchain_ollama.llms.OllamaLLM.html
             )
-        all_splits, aiSplits = asyncio.run(loadDocuments(st.session_state.chunk_size,st.session_state.overlap,st.session_state.docs, contextLLM))
+        all_splits, aiSplits = asyncio.run(loadDocuments(int(st.session_state.chunk_size),int(st.session_state.overlap),st.session_state.docs, contextLLM))
 
         if st.session_state.ContextualBM25RAG:
             st.session_state.BM25retriver = getBM25retriver(all_splits)
@@ -210,7 +211,7 @@ if prompt := st.chat_input(key="User_prompt"):
 if st.session_state.messages[-1]["role"] != "assistant":
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
-            response = generate_response(st.session_state.messages[-1]["content"], st.session_state.collection, st.session_state.db_ready, st.session_state.system_prompt, st.session_state.llm, st.session_state.BM25retriver) 
+            response = generate_response(st.session_state.messages[-1]["content"], st.session_state.collection, st.session_state.db_ready, st.session_state.system_prompt, st.session_state.llm, st.session_state.BM25retriver, int(st.session_state.dbRetrievalAmount)) 
             msg = st.write_stream(stream_data(response))
     message = {"role": "assistant", "content": response}
     st.session_state.messages.append(message)
@@ -293,11 +294,16 @@ with st.sidebar:
         st.session_state.CRAG_iterations = st.text_input(
             "Select CRAG iterations size",
             value='5',
+            disabled=True
         )
     with col2:
         st.session_state.overlap = st.text_input(
             "Select vectorDB overlap size",
             value='200',
+        ) 
+        st.session_state.dbRetrievalAmount = st.text_input(
+            "Select retrieval document amount",
+            value='3',
         )       
 
     st.subheader("Contextual RAG configuration")
