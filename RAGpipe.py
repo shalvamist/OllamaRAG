@@ -1,13 +1,16 @@
-from dbAPI import query_chromadb
+from dbAPI import query_chromadb, queryBM25
 
-def generate_response(prompt_input, collection=None, db_ready=False, system_prompt="", llm=None):
+def generate_response(prompt_input, collection=None, db_ready=False, system_prompt="", llm=None, BM25retriver = None):
     response = ""
     context = ""
 
     if llm is None:
         return response
+    
     # Step 1: Retrieve relevant documents from ChromaDB
     retrieved_docs, metadata = query_chromadb(prompt_input, collection=collection)
+    if BM25retriver is not None:
+        retrieved_docs.append(queryBM25(BM25retriver,prompt_input))
     if retrieved_docs:
         for i, doc in enumerate(retrieved_docs):
             context += f"Reference document {i + 1}: {doc}\n"
@@ -30,3 +33,5 @@ def generate_response(prompt_input, collection=None, db_ready=False, system_prom
     # Create a chain: prompt -> LLM 
     response = llm.invoke(prompt)
     return response 
+
+

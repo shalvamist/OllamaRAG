@@ -8,3 +8,4 @@ asyncio
 uuid
 chromadb
 pypdf
+bm25s

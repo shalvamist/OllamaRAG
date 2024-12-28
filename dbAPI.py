@@ -4,6 +4,7 @@ from chromadb.config import Settings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_ollama import OllamaEmbeddings
+import bm25s
 
 # Setting the embedding DB
 CHROMA_SETTINGS = Settings(
@@ -31,6 +32,7 @@ class ChromaDBEmbeddingFunction:
 
 async def loadDocuments(chunk_size=1000, overlap=200, docs=[], llmEmbedder=None):
     all_splits = []
+    AI_contexts = []
 
     text_splitter = RecursiveCharacterTextSplitter(
         # Set a really small chunk size, just to show.
@@ -61,10 +63,9 @@ async def loadDocuments(chunk_size=1000, overlap=200, docs=[], llmEmbedder=None)
                                 </chunk>
                                 Context:
                                 """
-                            AI_context = llmEmbedder.invoke(prompt)
-                            split = f"{split}\n\n{AI_context}"
+                            AI_contexts.append(llmEmbedder.invoke(prompt))
                         all_splits.append(split)
-    return all_splits
+    return all_splits, AI_contexts
 
 def getClient():
     return chromadb.PersistentClient(path=DB_PATH, settings=CHROMA_SETTINGS) 
@@ -92,3 +93,14 @@ def query_chromadb(query_text, n_results=3, collection=None):
         return results["documents"], results["metadatas"]
     else:
         return [], []
+    
+def getBM25retriver(docs=[]):
+    # Create the BM25 model and index the corpus
+    retriever = bm25s.BM25(corpus=docs)
+    retriever.index(bm25s.tokenize(docs))
+    return retriever
+
+def queryBM25(retriever, query_text, n_results=3):
+    results, scores = retriever.retrieve(bm25s.tokenize(query_text), k=n_results)
+    return results
+    

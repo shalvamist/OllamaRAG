@@ -7,7 +7,7 @@ from uuid import uuid4
 
 import ollama
 from langchain_ollama import OllamaLLM
-from dbAPI import loadDocuments, getClient, getCollection, query_chromadb, SOURCE_PATH, DB_PATH
+from dbAPI import loadDocuments, getClient, getCollection, getBM25retriver, SOURCE_PATH, DB_PATH
 from RAGpipe import generate_response
 
 ## Utility functions
@@ -47,7 +47,7 @@ def initApp():
     if 'collection' not in st.session_state:
         st.session_state.collection = None
     if 'chroma_client' not in st.session_state:
-        st.session_state.chroma_client = getClient()       
+        st.session_state.chroma_client = getClient()           
     if 'docs' not in st.session_state:
         st.session_state.docs = []
     if 'newMaxTokens' not in st.session_state:
@@ -64,21 +64,15 @@ def initApp():
         st.session_state.contextWindow = 2048
     if 'db_ready' not in st.session_state:
         st.session_state.db_ready = False
-    if "messages" not in st.session_state.keys():
+    if "messages" not in st.session_state:
         st.session_state.messages = [{"role": "assistant", "content": "How may I assist you today?"}]
-        st.session_state.messagesNum = 1
+    if "ContextualRAG" not in st.session_state:
+        st.session_state.ContextualRAG = False
+    if "ContextualBM25RAG" not in st.session_state:
+        st.session_state.ContextualBM25RAG = False
+    if "BM25retriver" not in st.session_state:
+        st.session_state.BM25retriver = None
 
-
-# Function to query the ChromaDB collection
-# def query_chromadb(query_text, n_results=3):
-#     if st.session_state.collection is not None:
-#         results = st.session_state.collection.query(
-#             query_texts=[query_text],
-#             n_results=n_results
-#         )
-#         return results["documents"], results["metadatas"]
-#     else:
-#         return [], []
 
 def deleteDB():
     # remove sources
@@ -116,18 +110,25 @@ def updateDB():
     with st.spinner("# Rebuilding DB - Please hold"):    
         # Load the documents
         contextLLM = None
-        if st.session_state.context_model != "" and st.session_state.context_model != None:
+        if st.session_state.context_model != "" and st.session_state.context_model != None and st.session_state.ContextualRAG:
             contextLLM = OllamaLLM(
                 model=st.session_state.context_model,
                 temperature=0.0,
                 num_predict=1000,
                 # other params... https://python.langchain.com/api_reference/ollama/llms/langchain_ollama.llms.OllamaLLM.html
             )
-        all_splits = asyncio.run(loadDocuments(st.session_state.chunk_size,st.session_state.overlap,st.session_state.docs, contextLLM))
+        all_splits, aiSplits = asyncio.run(loadDocuments(st.session_state.chunk_size,st.session_state.overlap,st.session_state.docs, contextLLM))
+
+        if st.session_state.ContextualBM25RAG:
+            st.session_state.BM25retriver = getBM25retriver(all_splits)
 
         st.session_state.collection = getCollection(st.session_state.embeddingModel, st.session_state.chroma_client, "rag_collection_demo", "A collection for RAG with Ollama - Demo1")
-
         uuids = [str(uuid4()) for _ in range(len(all_splits))]
+
+        if len(aiSplits) > 0:
+            for i in range(len(aiSplits)):
+                all_splits[i] = all_splits[i] + "\n\n" + aiSplits[i]
+
         if len(st.session_state.docs) > 0:
             st.session_state.collection.add(documents=all_splits, ids=uuids)
             st.session_state.db_ready = True  
@@ -160,36 +161,8 @@ def updateLoadedOllamaModel():
 def clear_chat_history():
     st.session_state.messages = [{"role": "assistant", "content": "How may I assist you today?"}]
 
-# def generate_response(prompt_input):
-#     response = ""
-#     context = ""
-#     # Step 1: Retrieve relevant documents from ChromaDB
-#     retrieved_docs, metadata = query_chromadb(prompt_input)
-#     if retrieved_docs:
-#         for i, doc in enumerate(retrieved_docs):
-#             context += f"Reference document {i + 1}: {doc}\n"
-#     else:
-#         st.session_state.db_ready = False  
-
-#     if st.session_state.system_prompt == "":
-#         prompt = f"""
-#             System: You are a helpful assistant. here to answer questions and provide context. Answer as best as you can
-#             User Input: {prompt_input}
-#             Answer:
-#             """
-#     else:
-#         prompt = f"""
-#             System: {st.session_state.system_prompt}
-#             Question: {prompt_input}
-#             Context: {context}
-#             Answer:
-#             """
-#     # Create a chain: prompt -> LLM 
-#     response = st.session_state.llm.invoke(prompt)
-#     return response   
-
 def updateMainOllamaModel():
-    print(st.session_state.ollama_model)
+    # print(st.session_state.ollama_model)
     if st.session_state.ollama_model != None:
         st.session_state.chatReady = True
         st.session_state.llm = OllamaLLM(
@@ -230,7 +203,6 @@ if prompt := st.chat_input(key="User_prompt"):
         st.error("Please select an Ollama model to proceed.")
     else:
         st.session_state.messages.append({"role": "user", "content": prompt})
-        st.session_state.messagesNum = st.session_state.messagesNum + 1
         with st.chat_message("user"):
             st.write(prompt)
 
@@ -238,11 +210,10 @@ if prompt := st.chat_input(key="User_prompt"):
 if st.session_state.messages[-1]["role"] != "assistant":
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
-            response = generate_response(st.session_state.messages[-1]["content"], st.session_state.collection, st.session_state.db_ready, st.session_state.system_prompt, st.session_state.llm) 
+            response = generate_response(st.session_state.messages[-1]["content"], st.session_state.collection, st.session_state.db_ready, st.session_state.system_prompt, st.session_state.llm, st.session_state.BM25retriver) 
             msg = st.write_stream(stream_data(response))
     message = {"role": "assistant", "content": response}
     st.session_state.messages.append(message)
-    # st.session_state.messagesNum = st.session_state.messagesNum + 1
 
 ### Sidebar layout
 with st.sidebar:
@@ -327,14 +298,22 @@ with st.sidebar:
         st.session_state.overlap = st.text_input(
             "Select vectorDB overlap size",
             value='200',
-        )
+        )       
+
+    st.subheader("Contextual RAG configuration")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.session_state.ContextualRAG = st.checkbox("Contextual Retrieval")
         st.session_state.context_model = st.selectbox(
             "Select context generation model",
             st.session_state.dropDown_model_list,
             index=None,
             placeholder = "Select model...",
-        )        
+        ) 
+    with col2:
+        st.session_state.ContextualBM25RAG = st.checkbox("Contextual BM25 Retrieval")
 
+    st.subheader("Data-base management")
     uploaded_files = st.file_uploader("Upload an article", 
                                         accept_multiple_files=True,
                                         type=('pdf'),
