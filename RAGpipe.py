@@ -1,37 +1,50 @@
 from dbAPI import query_chromadb, queryBM25
 
-def generate_response(prompt_input, collection=None, db_ready=False, system_prompt="", llm=None, BM25retriver = None, dbRetrievalAmount=3):
+def generate_response(
+    prompt_input: str, collection=None, db_ready: bool = False, system_prompt: str = "",
+    llm=None, BM25retriver=None, db_retrieval_amount: int = 3
+) -> str:
+    """
+    Generate a response to a user's prompt using a combination of a language model and context from a database.
+
+    Args:
+        prompt_input: The user's input prompt.
+        collection: The database collection to query for context.
+        db_ready: Whether the database is ready to query.
+        system_prompt: An optional system prompt to include in the input to the language model.
+        llm: The language model to use.
+        BM25retriver: An optional BM25 retriever to use for retrieving context.
+        db_retrieval_amount: The number of documents to retrieve from the database.
+
+    Returns:
+        The generated response.
+    """
+
     response = ""
     context = ""
+    retrieved_docs = []
 
     if llm is None:
         return response
-    
-    # Step 1: Retrieve relevant documents from ChromaDB
-    retrieved_docs, metadata = query_chromadb(prompt_input, collection=collection, n_results=dbRetrievalAmount)
+
+    if collection is not None and db_ready:
+        retrieved_docs, _ = query_chromadb(prompt_input, collection=collection, n_results=db_retrieval_amount)
     if BM25retriver is not None:
-        retrieved_docs.append(queryBM25(BM25retriver, prompt_input, dbRetrievalAmount))
+        retrieved_docs.append(queryBM25(BM25retriver, prompt_input, db_retrieval_amount))
     if retrieved_docs:
         for i, doc in enumerate(retrieved_docs):
             context += f"Reference document {i + 1}: {doc}\n"
     else:
-        db_ready = False  
+        db_ready = False
 
-    if system_prompt == "":
-        prompt = f"""
-            System: You are a helpful assistant. here to answer questions and provide context. Answer as best as you can
-            User Input: {prompt_input}
-            Answer:
-            """
-    else:
-        prompt = f"""
-            System: {system_prompt}
-            Question: {prompt_input}
-            Context: {context}
-            Answer:
-            """
-    # Create a chain: prompt -> LLM 
+    prompt = f"""
+        System: {system_prompt}
+        Question: {prompt_input}
+        Context: {context}
+        Answer:
+        """
+    # Create a chain: prompt -> LLM
     response = llm.invoke(prompt)
-    return response 
+    return response
 
 

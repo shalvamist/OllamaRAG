@@ -151,21 +151,45 @@ def updateOllamaModel():
                 st.session_state.dropDown_embeddingModel_list.append(model['model'])
 
 def updateLoadedOllamaModel():
+    """
+    Updates the list of loaded Ollama models in the session state.
+
+    This function queries the Ollama server for a list of loaded models and
+    updates the session state with the list of model names.
+
+    The list of loaded models is stored in the session state as
+    `loaded_model_list`.
+    """
     loaded_models = ollama.ps()
 
+    # Initialize an empty list to store the model names
     loaded_model_list = []
+
+    # Iterate over the loaded models and add their names to the list
     for model in loaded_models['models']:
         loaded_model_list.append(model['model'])
 
+    # Update the session state with the list of loaded models
     st.session_state.loaded_model_list = loaded_model_list
 
 def clear_chat_history():
     st.session_state.messages = [{"role": "assistant", "content": "How may I assist you today?"}]
 
 def updateMainOllamaModel():
-    # print(st.session_state.ollama_model)
-    if st.session_state.ollama_model != None:
+    """
+    Updates the main Ollama model in the session state.
+
+    This function checks if an Ollama model is selected in the session state.
+    If a model is selected, it sets up the language model with specified
+    parameters and performs a warmup invocation. If no model is selected,
+    it flags the chat as not ready.
+
+    """
+    if st.session_state.ollama_model is not None:
+        # Set chat readiness to true as a model is selected
         st.session_state.chatReady = True
+
+        # Initialize the Ollama language model with session parameters
         st.session_state.llm = OllamaLLM(
             model=st.session_state.ollama_model,
             temperature=st.session_state.temperature,
@@ -173,21 +197,42 @@ def updateMainOllamaModel():
             num_ctx=st.session_state.contextWindow,
             # other params... https://python.langchain.com/api_reference/ollama/llms/langchain_ollama.llms.OllamaLLM.html
         )
-        st.session_state.llm.invoke("Hello") # warmup
+
+        # Perform a warmup invocation to prepare the model
+        st.session_state.llm.invoke("Hello")
     else:
+        # Set chat readiness to false as no model is selected
         st.session_state.chatReady = False
 
 def stream_data(data):
+    """
+    Streams the input data word by word with a delay of 20ms between each word.
+
+    Args:
+        data (str): The input data to be streamed.
+
+    Yields:
+        str: The next word in the stream.
+    """
     for word in data.split(" "):
+        # Yield the word and add a space to ensure that the next word is not
+        # concatenated with the current word
         yield word + " "
+        # Add a delay of 20ms between each word
         time.sleep(0.02)
 
 def updateChatHistory():
+    """
+    Updates the chat history with the new messages from the session state.
+    """
     # Display or clear chat messages
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
+            # Adding this the chatbot messaging to workaround ghosting bug
             st.empty()
+            # Display the message
             st.write(message["content"])
+
 
 ### App initialization
 initApp()
