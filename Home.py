@@ -1,18 +1,19 @@
 import streamlit as st
 import os
-from database.rag_db import SOURCE_PATH, DB_PATH
+from database.rag_db import SOURCE_PATH, DB_PATH, get_client
 
 def initApp():
-    # Create the directories if it does not exist    
-    if not os.path.isdir(SOURCE_PATH):
-        os.mkdir(SOURCE_PATH)
-    else:
-        for file in os.listdir(SOURCE_PATH):
-            os.remove(os.path.join(SOURCE_PATH, file))
+    # Create the directories if they do not exist    
+    os.makedirs(SOURCE_PATH, exist_ok=True)
+    os.makedirs(DB_PATH, exist_ok=True)
 
-    if not os.path.isdir(DB_PATH):
-        os.mkdir(DB_PATH)
+    # Clean up source documents directory
+    for file in os.listdir(SOURCE_PATH):
+        file_path = os.path.join(SOURCE_PATH, file)
+        if os.path.isfile(file_path):
+            os.remove(file_path)
 
+    # Initialize session state variables
     if 'ollama_model' not in st.session_state:
         st.session_state.ollama_model = None
     if 'chatReady' not in st.session_state:
@@ -36,11 +37,11 @@ def initApp():
     if 'collection' not in st.session_state:
         st.session_state.collection = None
     if 'chroma_client' not in st.session_state:
-        st.session_state.chroma_client = None
+        st.session_state.chroma_client = get_client()
     if 'docs' not in st.session_state:
         st.session_state.docs = []
     if 'newMaxTokens' not in st.session_state:
-        st.session_state.newMaxTokens = 128
+        st.session_state.newMaxTokens = 1024
     if 'CRAG_iterations' not in st.session_state:
         st.session_state.CRAG_iterations = 5
     if 'overlap' not in st.session_state:

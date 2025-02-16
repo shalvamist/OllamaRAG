@@ -2,7 +2,7 @@ import streamlit as st
 import ollama
 from langchain_ollama import OllamaLLM
 
-def updateOllamaModel():
+def update_ollama_model():
     """Updates the list of available Ollama models."""
     ollama_models = ollama.list()
     st.session_state.dropDown_model_list = []
@@ -29,7 +29,7 @@ def check_loaded_models():
         st.session_state.loaded_model_list = []
         return False
 
-def updateMainOllamaModel():
+def update_main_ollama_model():
     """Updates the main Ollama model configuration."""
     if st.session_state.ollama_model is not None:
         try:
@@ -37,16 +37,18 @@ def updateMainOllamaModel():
             st.session_state.llm = OllamaLLM(
                 model=st.session_state.ollama_model,
                 temperature=st.session_state.temperature,
-                num_predict=st.session_state.newMaxTokens,
-                num_ctx=st.session_state.contextWindow,
+                num_predict=int(st.session_state.newMaxTokens),
+                num_ctx=int(st.session_state.contextWindow),
             )
             # Warmup with a simple prompt
             st.session_state.llm.invoke("Hello")
+            st.success("Model settings applied successfully!")
         except Exception as e:
             st.error(f"Error initializing model: {str(e)}")
             st.session_state.chatReady = False
     else:
         st.session_state.chatReady = False
+        st.error("Please select a model first")
 
 # Set page config
 st.set_page_config(
@@ -54,9 +56,46 @@ st.set_page_config(
     page_icon="🦙",
 )
 
-# Update available models
-updateOllamaModel()
+# Initialize session state variables if they don't exist
+if 'ollama_model' not in st.session_state:
+    st.session_state.ollama_model = None
 
+if 'contextWindow' not in st.session_state:
+    st.session_state.contextWindow = 2048
+
+if 'newMaxTokens' not in st.session_state:
+    st.session_state.newMaxTokens = 1024
+
+if 'temperature' not in st.session_state:
+    st.session_state.temperature = 0.7
+
+if 'system_prompt' not in st.session_state:
+    st.session_state.system_prompt = "You are a helpful AI assistant."
+
+if 'chatReady' not in st.session_state:
+    st.session_state.chatReady = False
+
+# Update available models
+update_ollama_model()
+
+# Sidebar - Model Status
+with st.sidebar:
+    st.header("🔄 Model Status")
+    if st.button('Check Loaded Models', key='check_models'):
+        has_loaded_models = check_loaded_models()
+        if has_loaded_models:
+            st.success(f"Currently loaded models: {', '.join(st.session_state.loaded_model_list)}")
+        else:
+            st.info("No models currently running")
+    
+    # Show current model status
+    st.divider()
+    if st.session_state.chatReady and st.session_state.ollama_model:
+        st.success(f"Active Model: {st.session_state.ollama_model}")
+    else:
+        st.warning("No model currently active")
+
+# Main content
 st.title("🦙 Ollama Model Settings")
 
 st.markdown("""
@@ -65,13 +104,15 @@ Configure your Ollama model settings here. These settings will affect how the mo
 
 # Model Selection
 st.header("Model Selection")
-st.session_state.ollama_model = st.selectbox(
+selected_model = st.selectbox(
     "Select an Ollama model",
     st.session_state.dropDown_model_list,
-    index=None,
+    index=st.session_state.dropDown_model_list.index(st.session_state.ollama_model) if st.session_state.ollama_model in st.session_state.dropDown_model_list else None,
     placeholder="Select model...",
     help="Choose the main model for chat interactions"
 )
+if selected_model:
+    st.session_state.ollama_model = selected_model
 
 # Model Installation
 st.header("Model Installation")
@@ -85,7 +126,7 @@ if ollama_model_pull:
     with st.spinner(f"Downloading {ollama_model_pull}..."):
         try:
             ollama.pull(ollama_model_pull)
-            updateOllamaModel()
+            update_ollama_model()
             st.success(f"Successfully downloaded {ollama_model_pull}")
         except Exception as e:
             st.error(f"Error downloading model: {str(e)}")
@@ -95,53 +136,42 @@ st.header("Model Parameters")
 
 col1, col2 = st.columns(2)
 with col1:
-    st.session_state.contextWindow = st.number_input(
+    context_window = st.number_input(
         "Context Window Size",
         min_value=512,
         max_value=8192,
-        value=int(st.session_state.contextWindow),
+        value=st.session_state.contextWindow,
         help="Maximum number of tokens the model can process at once"
     )
+    st.session_state.contextWindow = context_window
 
 with col2:
-    st.session_state.newMaxTokens = st.number_input(
+    max_tokens = st.number_input(
         "Maximum New Tokens",
         min_value=64,
         max_value=4096,
-        value=int(st.session_state.newMaxTokens),
+        value=st.session_state.newMaxTokens,
         help="Maximum number of tokens the model can generate in response"
     )
+    st.session_state.newMaxTokens = max_tokens
 
-st.session_state.temperature = st.slider(
+temperature = st.slider(
     "Temperature",
     min_value=0.0,
     max_value=2.0,
-    value=float(st.session_state.temperature) if 'temperature' in st.session_state else 1.0,
+    value=st.session_state.temperature,
     step=0.01,
     help="Controls randomness in the output (0 = deterministic, 2 = very random)"
 )
+st.session_state.temperature = temperature
 
-st.session_state.system_prompt = st.text_area(
+system_prompt = st.text_area(
     "System Prompt",
-    value=st.session_state.system_prompt if 'system_prompt' in st.session_state else "You are a helpful assistant.",
+    value=st.session_state.system_prompt,
     help="Sets the behavior and role of the assistant"
 )
+st.session_state.system_prompt = system_prompt
 
-# Model Status
-st.header("Model Status")
-col1, col2 = st.columns(2)
-with col1:
-    if st.button('Check Loaded Models', key='check_models'):
-        has_loaded_models = check_loaded_models()
-        if has_loaded_models:
-            st.success(f"Currently loaded models: {', '.join(st.session_state.loaded_model_list)}")
-        else:
-            st.info("No models currently running")
-
-with col2:
-    if st.button("Apply Settings", key='apply_settings'):
-        updateMainOllamaModel()
-        if st.session_state.chatReady:
-            st.success("Model settings applied successfully!")
-        else:
-            st.error("Please select a model first") 
+# Apply Settings Button
+if st.button("Apply Settings", key='apply_settings'):
+    update_main_ollama_model() 

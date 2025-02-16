@@ -82,6 +82,9 @@ else:
     # Display chat history
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
+            # Adding this the chatbot messaging to workaround ghosting bug
+            st.empty()
+            # Display the message
             st.write(message["content"])
 
     # Chat input
