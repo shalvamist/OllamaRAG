@@ -1,6 +1,6 @@
 import streamlit as st
 import os
-from dbAPI import SOURCE_PATH, DB_PATH
+from database.rag_db import SOURCE_PATH, DB_PATH
 
 def initApp():
     # Create the directories if it does not exist    

@@ -3,7 +3,13 @@ import os
 from uuid import uuid4
 import asyncio
 from langchain_ollama import OllamaLLM
-from dbAPI import loadDocuments, getClient, getCollection, getBM25retriver, SOURCE_PATH
+from database.rag_db import (
+    loadDocuments,
+    getClient,
+    getCollection,
+    getBM25retriver,
+    SOURCE_PATH
+)
 
 def deleteDB():
     """Deletes the current database and its contents."""
