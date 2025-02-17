@@ -401,7 +401,6 @@ else:
     # Chat interface
     st.markdown(f"""
     Currently using model: **{st.session_state.ollama_model}**  
-    System prompt: *{st.session_state.system_prompt}*
     """)
     
     # Status indicators
@@ -412,19 +411,13 @@ else:
 
     st.divider()
 
-    # Create a container for chat messages with fixed height
-    chat_container = st.container()
-    
-    # Display chat history in the container
-    with chat_container:
-        # Adding this the chatbot messaging to workaround ghosting bug
+    for message in st.session_state.messages:
         st.empty()
-        for message in st.session_state.messages:
-            with st.chat_message(message["role"]):
-                # Adding this the chatbot messaging to workaround ghosting bug
-                st.empty()
-                # Display the message
-                st.write(message["content"])
+        with st.chat_message(message["role"]):
+            # Adding this the chatbot messaging to workaround ghosting bug
+            st.empty()
+            # Display the message
+            st.write(message["content"])
 
     # Save Chat Dialog
     if st.session_state.show_save_dialog:

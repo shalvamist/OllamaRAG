@@ -78,9 +78,10 @@ def generate_response(
     
     # Create the final prompt
     prompt_template = """
-{context}
-Human: {query}
-Assistant: Let me help you with that. """
+        {context}
+        if there is no relevant information in the context, note that in your reponse and answer based on your knowledge.
+        Human: {query}
+        Assistant: Let me help you with that. """
 
     # Combine all context parts and format the prompt
     full_context = "\n".join(context_parts)
