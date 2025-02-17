@@ -341,20 +341,15 @@ with col2:
     )
     st.session_state.newMaxTokens = max_tokens
 
-def update_temperature():
-    """Callback to update temperature in session state"""
-    st.session_state.temperature = st.session_state.temp_value
-
 temperature = st.slider(
     "Temperature",
     min_value=0.0,
     max_value=2.0,
     value=st.session_state.temperature,
     step=0.01,
-    help="Controls randomness in the output (0 = deterministic, 2 = very random)",
-    key="temp_value",
-    on_change=update_temperature
+    help="Controls randomness in the output (0 = deterministic, 2 = very random)"
 )
+st.session_state.temperature = temperature
 
 system_prompt = st.text_area(
     "System Prompt",

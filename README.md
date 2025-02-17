@@ -32,7 +32,6 @@ OllamaRAG brings the power of Retrieval-Augmented Generation (RAG) to your local
 - 💾 **Persistent Memory**: Save and manage conversation history across sessions
 - 📊 **Smart Document Processing**: Intelligent chunking and embedding of your documents
 - 🎯 **Context-Aware Responses**: LLM outputs enhanced with relevant document snippets
-- 🛠️ **Highly Configurable**: Customize every aspect of the RAG pipeline
 
 ### Built For Everyone
 
@@ -40,8 +39,6 @@ OllamaRAG brings the power of Retrieval-Augmented Generation (RAG) to your local
 - 💼 **Professionals**: Enhance productivity with document-aware AI assistance
 - 🎓 **Students**: Learn and explore topics with AI-powered document analysis
 - 🧪 **Developers**: Experiment with different RAG implementations
-
-> 🚧 **Coming Soon**: Custom LangChain RAG pipelines support for even more flexibility!
 
 ### Built With
 
@@ -60,14 +57,7 @@ Want to test OllamaRAG without any local setup? We've got you covered!
 Our Colab notebook offers:
 - 🔥 **Instant Setup**: Get started in minutes with zero local installation
 - 📚 **Interactive Tutorial**: Step-by-step guide to all features
-- 🛠️ **Full Feature Access**: Try out all RAG capabilities
-- 🧪 **Experimentation**: Test different models and configurations
-- 📝 **Code Examples**: Learn how to integrate OllamaRAG into your projects
-
-Perfect for:
-- 🔍 Evaluating OllamaRAG before local installation
 - 📖 Learning about RAG implementations
-- 🎓 Educational purposes and workshops
 - 🧪 Quick prototyping and testing
 
 Click the badge above to launch the notebook and start exploring! 
