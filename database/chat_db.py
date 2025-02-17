@@ -31,18 +31,24 @@ def init_db():
          FOREIGN KEY (conversation_id) REFERENCES conversations (id))
     ''')
     
+    # Check if chat_name column exists, if not add it
+    c.execute("PRAGMA table_info(conversations)")
+    columns = [column[1] for column in c.fetchall()]
+    if 'chat_name' not in columns:
+        c.execute('ALTER TABLE conversations ADD COLUMN chat_name TEXT')
+    
     conn.commit()
     conn.close()
 
-def create_conversation(model, system_prompt):
+def create_conversation(model: str, system_prompt: str, chat_name: str = None):
     """Create a new conversation and return its ID."""
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     
     c.execute('''
-        INSERT INTO conversations (model, system_prompt)
-        VALUES (?, ?)
-    ''', (model, system_prompt))
+        INSERT INTO conversations (model, system_prompt, chat_name, created_at)
+        VALUES (?, ?, ?, datetime('now', 'localtime'))
+    ''', (model, system_prompt, chat_name))
     
     conversation_id = c.lastrowid
     conn.commit()
@@ -80,38 +86,51 @@ def get_conversation_history(conversation_id):
     
     return messages
 
-def get_recent_conversations(limit=5):
-    """Get recent conversations with their first message."""
+def get_recent_conversations():
+    """Get list of recent conversations."""
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     
-    c.execute('''
-        SELECT c.id, c.model, c.system_prompt, c.created_at,
-               m.content as first_message
-        FROM conversations c
-        LEFT JOIN messages m ON m.conversation_id = c.id
-        WHERE m.id IN (
-            SELECT MIN(id)
-            FROM messages
-            GROUP BY conversation_id
-        )
-        ORDER BY c.created_at DESC
-        LIMIT ?
-    ''', (limit,))
-    
-    conversations = [
-        {
-            "id": row[0],
-            "model": row[1],
-            "system_prompt": row[2],
-            "created_at": row[3],
-            "first_message": row[4]
-        }
-        for row in c.fetchall()
-    ]
-    
-    conn.close()
-    return conversations
+    try:
+        c.execute('''
+            SELECT 
+                c.id, 
+                c.model, 
+                c.created_at, 
+                m.content as first_message,
+                c.chat_name
+            FROM conversations c
+            LEFT JOIN messages m ON c.id = m.conversation_id
+            WHERE m.id = (
+                SELECT MIN(id)
+                FROM messages
+                WHERE conversation_id = c.id
+            )
+            ORDER BY c.created_at DESC
+        ''')
+        
+        conversations = []
+        for row in c.fetchall():
+            # Format the date for display
+            created_at = datetime.strptime(row[2], '%Y-%m-%d %H:%M:%S')
+            formatted_date = created_at.strftime('%Y-%m-%d %H:%M')
+            
+            # Use chat_name if available, otherwise use first message or default text
+            display_name = row[4] if row[4] else (row[3] if row[3] else "Untitled Chat")
+            
+            conversations.append({
+                'id': row[0],
+                'model': row[1],
+                'created_at': row[2],
+                'first_message': f"{display_name} ({formatted_date})"
+            })
+        
+        return conversations
+    except Exception as e:
+        print(f"Error fetching conversations: {str(e)}")
+        return []
+    finally:
+        conn.close()
 
 def delete_conversation(conversation_id):
     """Delete a conversation and all its messages."""

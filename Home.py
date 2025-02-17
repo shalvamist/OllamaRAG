@@ -76,6 +76,140 @@ st.set_page_config(
     layout="wide"
 )
 
+# Custom CSS for styling
+st.markdown("""
+<style>
+    /* Main background and text colors */
+    .stApp {
+        background-color: #a9b89e;
+        color: #1a2234;
+    }
+    
+    /* Main content width and layout */
+    .block-container {
+        max-width: 60% !important;
+        padding-left: 1rem;
+        padding-right: 1rem;
+        background-color: #fff;
+        border-radius: 6px;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+        margin: 0.5rem;
+    }
+    
+    /* Headers */
+    h1 {
+        color: #2c3e50 !important;
+        margin-bottom: 1rem !important;
+        margin-top: 1rem !important;
+        font-size: 2.2em !important;
+        padding-bottom: 0.5rem !important;
+        font-weight: 800 !important;
+        border-bottom: 3px solid #3498db !important;
+    }
+    
+    h2 {
+        color: #2c3e50 !important;
+        margin-bottom: 0.8rem !important;
+        margin-top: 0.8rem !important;
+        font-size: 1.8em !important;
+        padding-bottom: 0.4rem !important;
+        font-weight: 700 !important;
+    }
+    
+    h3 {
+        color: #2c3e50 !important;
+        margin-bottom: 0.6rem !important;
+        margin-top: 0.6rem !important;
+        font-size: 1.4em !important;
+        padding-bottom: 0.3rem !important;
+        font-weight: 600 !important;
+    }
+    
+    /* Reduce markdown spacing */
+    .stMarkdown {
+        margin-bottom: 0.3rem !important;
+    }
+    
+    /* Buttons */
+    .stButton button {
+        background-color: #3498db;
+        color: #fff;
+        border: none;
+        font-weight: bold;
+        padding: 0.4rem 0.8rem;
+        border-radius: 6px;
+        min-height: 40px;
+        margin: 0.3rem 0;
+        font-size: 0.9em;
+    }
+    
+    /* Messages */
+    .stSuccess, .stError, .stInfo, .stWarning {
+        padding: 0.5rem;
+        border-radius: 6px;
+        margin: 0.3rem 0;
+        font-size: 0.9em;
+    }
+    
+    /* Input fields */
+    .stTextInput input, .stNumberInput input, .stTextArea textarea {
+        background-color: #f8fafc;
+        color: #2c3e50;
+        border: 2px solid #3498db;
+        border-radius: 6px;
+        padding: 0.4rem;
+        min-height: 40px;
+        font-size: 0.9em;
+        margin: 0.2rem 0;
+    }
+    
+    /* Selectbox */
+    .stSelectbox select {
+        background-color: #f8fafc;
+        color: #2c3e50;
+        border: 2px solid #3498db;
+        border-radius: 6px;
+        padding: 0.4rem;
+        min-height: 40px;
+        font-size: 0.9em;
+        margin: 0.2rem 0;
+    }
+    
+    /* Checkbox */
+    .stCheckbox {
+        margin: 0.2rem 0;
+    }
+    .stCheckbox label {
+        color: #2c3e50 !important;
+        font-size: 0.9em;
+        padding: 0.2rem 0;
+    }
+    
+    /* Divider */
+    hr {
+        margin: 0.8rem 0;
+        border-width: 1px;
+    }
+
+    /* Section spacing */
+    .element-container {
+        margin-bottom: 0.5rem !important;
+    }
+
+    /* Column gaps */
+    .row-widget {
+        gap: 0.5rem !important;
+    }
+
+    /* Help text */
+    .stTextInput .help-text, .stNumberInput .help-text, .stSelectbox .help-text {
+        font-size: 0.8em;
+        margin-top: 0.1rem;
+        color: #666;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 # Initialize app
 initApp()
 
