@@ -74,31 +74,6 @@ Click the badge above to launch the notebook and start exploring!
 
 > Note: The Colab notebook includes detailed installation steps and usage examples to help you get the most out of OllamaRAG.
 
-## Installation
-1. Clone the repo
-   
-   ```bash git clone https://github.com/shalvamist/OllamaRAG.git```
-3. Install requirments
-
-   ```bash pip install -r OllamaRAG/requirments.txt```
-5. Run the Streamlit app
-  
-   ```bash streamlit run .\webApp.py```
-
-# OllamaRAG 🦙🦜🔗
-
-A powerful local RAG (Retrieval-Augmented Generation) application that combines Ollama's local LLMs with document retrieval capabilities.
-
-## Features
-
-- 🤖 Local LLM support through Ollama
-- 📚 RAG (Retrieval-Augmented Generation) capabilities
-- 💾 Persistent chat history with SQLite
-- 🔍 Hybrid search with vector embeddings and BM25
-- 📄 PDF document processing and chunking
-- 🎯 Contextual retrieval options
-- 🎨 Modern Streamlit interface
-
 ## Prerequisites
 
 1. **Python 3.8+** installed on your system
