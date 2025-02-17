@@ -79,7 +79,6 @@ def generate_response(
     # Create the final prompt
     prompt_template = """
         {context}
-        if there is no relevant information in the context, note that in your reponse and answer based on your knowledge.
         Human: {query}
         Assistant: Let me help you with that. """
 
