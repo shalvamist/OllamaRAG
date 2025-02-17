@@ -417,6 +417,8 @@ else:
     
     # Display chat history in the container
     with chat_container:
+        # Adding this the chatbot messaging to workaround ghosting bug
+        st.empty()
         for message in st.session_state.messages:
             with st.chat_message(message["role"]):
                 # Adding this the chatbot messaging to workaround ghosting bug
@@ -457,8 +459,6 @@ else:
                         st.session_state.BM25retriver,
                         int(st.session_state.dbRetrievalAmount)
                     )
-                    # Adding this the chatbot messaging to workaround ghosting bug
-                    st.empty()
                     # Display the message
                     st.write_stream(stream_data(response))
                     
