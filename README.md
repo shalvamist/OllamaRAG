@@ -6,7 +6,7 @@
 <div align="center">
   <a href="https://github.com/shalvamist/OllamaRAG/">
   </a>
-  <h1 align="center">🦙🦜�� OllamaRAG 🔗🦜🦙</h1>
+  <h1 align="center">🦙🦜🔗 OllamaRAG 🔗🦜🦙</h1>
   <p align="center">
     <strong>Supercharge your local LLMs with powerful RAG capabilities! 🚀</strong>
     <br />
