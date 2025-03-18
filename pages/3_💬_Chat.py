@@ -121,7 +121,17 @@ def format_thinking_content(content):
     """Format thinking content with markdown code block and italics."""
     # Clean up the content and ensure proper formatting
     content = content.strip()
-    return f"```\n{content}\n```"
+    # Split content into lines and wrap each line
+    wrapped_content = "\n".join(content.split("\n"))
+    return f'<div class="thinking-text">{wrapped_content}</div>'
+
+# Update the thinking section template
+THINKING_SECTION_TEMPLATE = '''<details class="thinking-details">
+    <summary>💭 Thinking Process</summary>
+    <div class="thinking-content">
+        {content}
+    </div>
+</details>'''
 
 def parse_message_content(content):
     """Parse message content to ensure consistent formatting of thinking sections."""
@@ -133,10 +143,12 @@ def parse_message_content(content):
                 post_think = parts[1].strip()
                 thinking_content = parts[0].split('<think>')[1].strip()
                 
-                # Ensure proper spacing and formatting
-                thinking_section = f"<details><summary>💭 Thinking Process</summary>\n\n{format_thinking_content(thinking_content)}\n\n</details>"
+                # Format thinking section
+                thinking_section = THINKING_SECTION_TEMPLATE.format(
+                    content=format_thinking_content(thinking_content)
+                )
                 
-                # Combine the parts with proper spacing
+                # Combine parts with proper spacing
                 if pre_think and post_think:
                     return f"{pre_think}\n\n{thinking_section}\n\n{post_think}"
                 elif pre_think:
@@ -372,6 +384,47 @@ st.markdown("""
         margin-top: 0.1rem;
         color: #666;
     }
+
+    /* Thinking process container styling */
+    .thinking-details {
+        margin: 1em 0;
+        padding: 0.5em;
+        border-radius: 4px;
+        background-color: #f8f9fa;
+    }
+
+    .thinking-content {
+        margin: 1em 0;
+        padding: 1em;
+        background-color: #f1f3f4;
+        border-radius: 4px;
+    }
+
+    .thinking-text {
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+        font-family: monospace;
+        font-size: 0.9em;
+        line-height: 1.5;
+        color: #1a1a1a;
+        max-width: 100%;
+    }
+
+    details > summary {
+        cursor: pointer;
+        padding: 0.5em;
+        border-radius: 4px;
+    }
+
+    details > summary:hover {
+        background-color: #e9ecef;
+    }
+
+    details[open] > summary {
+        margin-bottom: 0.5em;
+        border-bottom: 1px solid #dee2e6;
+    }
 </style>
 
 <script>
@@ -508,7 +561,9 @@ else:
                         thinking_text += chunk
                         # Show thinking indicator and current thinking content
                         display_text = full_response.split('<think>')[0].strip()
-                        thinking_section = f"<details><summary>💭 Thinking Process</summary>\n\n{format_thinking_content(thinking_text)}\n\n</details>"
+                        thinking_section = THINKING_SECTION_TEMPLATE.format(
+                            content=format_thinking_content(thinking_text)
+                        )
                         
                         if display_text:
                             message_placeholder.markdown(f"{display_text}\n\n{thinking_section}", unsafe_allow_html=True)
@@ -525,7 +580,9 @@ else:
                             thinking_content = parts[0].split('<think>')[1].strip()
                             
                             # Create expandable thinking section with formatted content
-                            thinking_section = f"<details><summary>💭 Thinking Process</summary>\n\n{format_thinking_content(thinking_content)}\n\n</details>"
+                            thinking_section = THINKING_SECTION_TEMPLATE.format(
+                                content=format_thinking_content(thinking_content)
+                            )
                             
                             # Combine parts with proper spacing
                             if pre_think and post_think:
@@ -559,7 +616,9 @@ else:
                         thinking_content = parts[0].split('<think>')[1].strip()
                         
                         # Create expandable thinking section with formatted content
-                        thinking_section = f"<details><summary>💭 Thinking Process</summary>\n\n{format_thinking_content(thinking_content)}\n\n</details>"
+                        thinking_section = THINKING_SECTION_TEMPLATE.format(
+                            content=format_thinking_content(thinking_content)
+                        )
                         
                         # Combine parts with proper spacing
                         if pre_think and post_think:
