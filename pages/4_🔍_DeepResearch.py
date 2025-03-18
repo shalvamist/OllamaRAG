@@ -162,6 +162,7 @@ INSTRUCTIONS:
 3. Use proper markdown headings and formatting
 4. Include specific facts and data points
 5. Cite sources for important claims
+6. IMPORTANT: Extract and include ONLY valid web URLs from the search results in the sources list
 
 YOUR RESPONSE MUST BE A SINGLE JSON OBJECT WITH THIS EXACT STRUCTURE:
 {{
@@ -171,8 +172,8 @@ YOUR RESPONSE MUST BE A SINGLE JSON OBJECT WITH THIS EXACT STRUCTURE:
         "Specific unanswered question 2"
     ],
     "sources": [
-        "Source 1 with URL or reference",
-        "Source 2 with URL or reference"
+        "https://example.com/article1",
+        "https://example.com/article2"
     ]
 }}
 
@@ -184,12 +185,13 @@ CRITICAL FORMATTING RULES:
 5. Do not use single quotes
 6. Do not include any text before or after the JSON object
 7. Do not include any markdown code block markers
+8. Sources MUST be valid web URLs starting with http:// or https://
 
 EXAMPLE OF CORRECT JSON RESPONSE:
 {{
     "summary": "## Research Summary\\n\\n### Overview\\nQuantum computing represents a revolutionary approach to computation.\\n\\n### Key Findings\\n* Current quantum computers maintain coherence for up to 100 microseconds\\n* IBM's latest processor achieves quantum volume of 128\\n\\n### Detailed Analysis\\nRecent advances in quantum computing...\\n\\n### Conclusions\\nSignificant progress but challenges remain",
     "gaps": ["What is the impact on current cryptography?", "How scalable are current approaches?"],
-    "sources": ["IBM Quantum Computing Report 2024", "Nature Physics Journal Article"]
+    "sources": ["https://research.ibm.com/quantum/report-2024", "https://www.nature.com/articles/physics-quantum-2024"]
 }}
 
 REMEMBER:
@@ -198,7 +200,8 @@ REMEMBER:
 3. Use only the specified markdown formatting
 4. Write in an objective, academic tone
 5. Include specific facts and figures
-6. Cite sources for major claims
+6. Sources must be valid web URLs
+7. Extract URLs directly from the search results
 
 Generate your JSON response:"""
 
@@ -431,5 +434,13 @@ if st.session_state.research_summary:
     
     if st.session_state.sources:
         with st.expander("View Sources", expanded=False):
-            for idx, source in enumerate(st.session_state.sources, 1):
-                st.markdown(f"{idx}. {source}") 
+            st.markdown("### Sources Used")
+            # Filter and display only valid web URLs
+            web_sources = [source for source in st.session_state.sources if source.startswith(('http://', 'https://'))]
+            if web_sources:
+                for idx, source in enumerate(web_sources, 1):
+                    # Clean the URL and ensure it's properly formatted
+                    clean_url = source.strip().rstrip('.')
+                    st.markdown(f"{idx}. [{clean_url}]({clean_url})")
+            else:
+                st.info("No web sources were found in the search results. This might happen if:\n- The search didn't return any valid URLs\n- The sources weren't properly extracted from the search results\n- The search API is temporarily unavailable") 
