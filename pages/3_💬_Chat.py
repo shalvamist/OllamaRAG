@@ -117,6 +117,38 @@ def save_current_chat(chat_name):
         st.session_state.show_save_dialog = False
         st.rerun()
 
+def format_thinking_content(content):
+    """Format thinking content with markdown code block and italics."""
+    # Clean up the content and ensure proper formatting
+    content = content.strip()
+    return f"```\n{content}\n```"
+
+def parse_message_content(content):
+    """Parse message content to ensure consistent formatting of thinking sections."""
+    if '<think>' in content and '</think>' in content:
+        try:
+            parts = content.split('</think>')
+            if len(parts) > 1:
+                pre_think = parts[0].split('<think>')[0].strip()
+                post_think = parts[1].strip()
+                thinking_content = parts[0].split('<think>')[1].strip()
+                
+                # Ensure proper spacing and formatting
+                thinking_section = f"<details><summary>💭 Thinking Process</summary>\n\n{format_thinking_content(thinking_content)}\n\n</details>"
+                
+                # Combine the parts with proper spacing
+                if pre_think and post_think:
+                    return f"{pre_think}\n\n{thinking_section}\n\n{post_think}"
+                elif pre_think:
+                    return f"{pre_think}\n\n{thinking_section}"
+                elif post_think:
+                    return f"{thinking_section}\n\n{post_think}"
+                else:
+                    return thinking_section
+        except Exception:
+            return content
+    return content
+
 # Set page config
 st.set_page_config(
     page_title="Chat - OllamaRAG",
@@ -416,8 +448,8 @@ else:
         with st.chat_message(message["role"]):
             # Adding this the chatbot messaging to workaround ghosting bug
             st.empty()
-            # Display the message
-            st.write(message["content"])
+            # Display the message with parsed thinking sections
+            st.markdown(parse_message_content(message["content"]), unsafe_allow_html=True)
 
     # Save Chat Dialog
     if st.session_state.show_save_dialog:
@@ -442,21 +474,106 @@ else:
         # Generate response
         if st.session_state.messages[-1]["role"] != "assistant":
             with st.chat_message("assistant"):
-                with st.spinner("Thinking..."):
-                    response = generate_response(
-                        st.session_state.messages[-1]["content"],
-                        st.session_state.collection,
-                        st.session_state.db_ready,
-                        st.session_state.system_prompt,
-                        st.session_state.llm,
-                        st.session_state.BM25retriver,
-                        int(st.session_state.dbRetrievalAmount)
-                    )
-                    # Display the message
-                    st.write_stream(stream_data(response))
+                message_placeholder = st.empty()
+                full_response = ""
+                thinking_text = ""
+                is_thinking = False
+                final_response = ""
+                has_thinking = False
+                
+                # Stream the response
+                for chunk in generate_response(
+                    st.session_state.messages[-1]["content"],
+                    st.session_state.collection,
+                    st.session_state.db_ready,
+                    st.session_state.system_prompt,
+                    st.session_state.llm,
+                    st.session_state.BM25retriver,
+                    int(st.session_state.dbRetrievalAmount)
+                ):
+                    full_response += chunk
                     
-                    # Add assistant response to UI
-                    st.session_state.messages.append({"role": "assistant", "content": response})
+                    # Handle thinking process for DeepSeek models
+                    if '<think>' in full_response and not is_thinking:
+                        is_thinking = True
+                        has_thinking = True
+                        thinking_text = ""
+                        # Get text before thinking
+                        display_text = full_response.split('<think>')[0].strip()
+                        if display_text:
+                            message_placeholder.markdown(display_text + " 💭")
+                        continue
+                    
+                    if is_thinking and '</think>' not in full_response:
+                        thinking_text += chunk
+                        # Show thinking indicator and current thinking content
+                        display_text = full_response.split('<think>')[0].strip()
+                        thinking_section = f"<details><summary>💭 Thinking Process</summary>\n\n{format_thinking_content(thinking_text)}\n\n</details>"
+                        
+                        if display_text:
+                            message_placeholder.markdown(f"{display_text}\n\n{thinking_section}", unsafe_allow_html=True)
+                        else:
+                            message_placeholder.markdown(thinking_section, unsafe_allow_html=True)
+                        continue
+                        
+                    if '</think>' in full_response and is_thinking:
+                        is_thinking = False
+                        parts = full_response.split('</think>')
+                        if len(parts) > 1:
+                            pre_think = parts[0].split('<think>')[0].strip()
+                            post_think = parts[1].strip()
+                            thinking_content = parts[0].split('<think>')[1].strip()
+                            
+                            # Create expandable thinking section with formatted content
+                            thinking_section = f"<details><summary>💭 Thinking Process</summary>\n\n{format_thinking_content(thinking_content)}\n\n</details>"
+                            
+                            # Combine parts with proper spacing
+                            if pre_think and post_think:
+                                final_response = f"{pre_think}\n\n{thinking_section}\n\n{post_think}"
+                            elif pre_think:
+                                final_response = f"{pre_think}\n\n{thinking_section}"
+                            elif post_think:
+                                final_response = f"{thinking_section}\n\n{post_think}"
+                            else:
+                                final_response = thinking_section
+                                
+                            message_placeholder.markdown(final_response, unsafe_allow_html=True)
+                        continue
+                    
+                    # Normal response handling for non-thinking parts
+                    if not is_thinking:
+                        if '<think>' not in full_response:
+                            final_response = full_response
+                            message_placeholder.markdown(final_response)
+                
+                # Update final response without cursor
+                if not final_response:
+                    final_response = full_response
+                
+                if '<think>' in final_response and '</think>' in final_response:
+                    # Clean up any remaining think tags and create final expandable section
+                    parts = final_response.split('</think>')
+                    if len(parts) > 1:
+                        pre_think = parts[0].split('<think>')[0].strip()
+                        post_think = parts[1].strip()
+                        thinking_content = parts[0].split('<think>')[1].strip()
+                        
+                        # Create expandable thinking section with formatted content
+                        thinking_section = f"<details><summary>💭 Thinking Process</summary>\n\n{format_thinking_content(thinking_content)}\n\n</details>"
+                        
+                        # Combine parts with proper spacing
+                        if pre_think and post_think:
+                            final_response = f"{pre_think}\n\n{thinking_section}\n\n{post_think}"
+                        elif pre_think:
+                            final_response = f"{pre_think}\n\n{thinking_section}"
+                        elif post_think:
+                            final_response = f"{thinking_section}\n\n{post_think}"
+                        else:
+                            final_response = thinking_section
+                
+                message_placeholder.markdown(final_response, unsafe_allow_html=True)
+                # Store the response with the collapsible thinking section
+                st.session_state.messages.append({"role": "assistant", "content": final_response})
 
     # Display chat settings and history
     with st.sidebar:
