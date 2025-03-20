@@ -74,6 +74,8 @@ if 'iteration_count' not in st.session_state:
     st.session_state.iteration_count = 0
 if 'max_search_attempts' not in st.session_state:
     st.session_state.max_search_attempts = 3
+if 'num_subtopics' not in st.session_state:
+    st.session_state.num_subtopics = 3
 
 # Title and description
 st.title("🔍 Deep Research")
@@ -130,6 +132,14 @@ with st.sidebar:
         value=5,
         help="Maximum number of research cycles to perform"
     )
+
+    st.session_state.num_subtopics = st.slider(
+        "Number of Subtopics",
+        min_value=1,
+        max_value=20,
+        value=3,
+        help="Number of subtopics to generate"
+    )
     
     st.divider()
     
@@ -170,6 +180,7 @@ YOUR QUERY:"""
 SUBTOPICS_TEMPLATE = """Generate a list of comprehensive subtopics for detailed research on the given topic.
 
 TOPIC: {topic}
+NUMBER OF SUBTOPICS: {num_subtopics}
 
 INSTRUCTIONS:
 1. Analyze the topic and break it down into logical subtopics
@@ -178,6 +189,8 @@ INSTRUCTIONS:
 4. Ensure coverage is comprehensive
 5. Return ONLY a JSON object with a "subtopics" array
 6. Each subtopic should be a clear, concise phrase
+7. The number of subtopics should be equal to the number of subtopics you are given
+8. The subtopics should be unique and not repeat themselves
 
 EXAMPLE RESPONSE:
 {{
@@ -191,6 +204,7 @@ EXAMPLE RESPONSE:
 }}
 
 YOUR RESPONSE MUST BE A VALID JSON OBJECT WITH THE EXACT STRUCTURE SHOWN ABOVE.
+YOUR RESPONSE MUST INCLUDE THE EXACT NUMBER OF SUBTOPICS YOU ARE GIVEN.
 DO NOT include any additional text, formatting, or explanations.
 DO NOT use newlines within the JSON structure.
 
@@ -610,7 +624,7 @@ async def conduct_research(topic):
         # Step 2: Generate subtopics
         status_text.text("Generating research subtopics...")
         try:
-            subtopics_result = (await subtopics_chain.ainvoke({"topic": topic}))["text"]
+            subtopics_result = (await subtopics_chain.ainvoke({"topic": topic, "num_subtopics": st.session_state.num_subtopics}))["text"]
             # Clean up the JSON string
             subtopics_result = subtopics_result.strip()
             if subtopics_result.startswith('```json'):
@@ -695,17 +709,17 @@ async def conduct_research(topic):
             overview_content = f"# Research Overview: {topic}\n\n"
             overview_content += final_result + "\n\n"
             
-            # Add all sources used
-            overview_content += "\n\n## Sources Used\n\n"
-            unique_sources = list(dict.fromkeys(all_sources))  # Remove duplicates while preserving order
-            for source in unique_sources:
-                overview_content += f"- {source}\n"
+            # # Add all sources used
+            # overview_content += "\n\n## Sources Used\n\n"
+            # unique_sources = list(dict.fromkeys(all_sources))  # Remove duplicates while preserving order
+            # for source in unique_sources:
+            #     overview_content += f"- {source}\n"
             
             write_markdown_file(overview_file, overview_content)
             
             # Update session state with results
             st.session_state.research_summary = overview_content
-            st.session_state.sources = unique_sources
+            st.session_state.sources = list(dict.fromkeys(all_sources)) 
                 
                 
         except Exception as e:
@@ -748,41 +762,6 @@ if st.button("Start Research", disabled=st.session_state.research_in_progress):
 # Display research results
 if st.session_state.research_summary:
     st.header("Research Results")
-    st.markdown(f"**Completed {st.session_state.iteration_count} research iterations**")
-    
-    # Save results if enabled
-    if output_folder and output_folder:
-        try:
-            import os
-            from datetime import datetime
-            
-            # Create output folder if it doesn't exist
-            os.makedirs(output_folder, exist_ok=True)
-            
-            # Generate filename with timestamp
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"research_results_{timestamp}.md"
-            filepath = os.path.join(output_folder, filename)
-            
-            # Prepare content
-            content = f"# Research Results: {research_topic}\n"
-            content += f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
-            content += st.session_state.research_summary
-            
-            # Add sources
-            content += "\n\n## Sources\n"
-            web_sources = [source for source in st.session_state.sources if source.startswith(('http://', 'https://'))]
-            for idx, source in enumerate(web_sources, 1):
-                content += f"{idx}. {source}\n"
-            
-            # Write to file
-            with open(filepath, 'w', encoding='utf-8') as f:
-                f.write(content)
-            
-            st.success(f"Research results saved to: {filepath}")
-            
-        except Exception as e:
-            st.error(f"Error saving research results: {str(e)}")
     
     with st.expander("View Research Summary", expanded=True):
         st.markdown(st.session_state.research_summary)
