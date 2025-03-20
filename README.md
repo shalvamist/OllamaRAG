@@ -107,13 +107,14 @@ streamlit run Home.py
 
 ## Application Structure
 
-The application consists of five main pages:
+The application consists of six main pages:
 
 1. **Home** (`Home.py`): Landing page with system status and quick start guide
 2. **Model Settings** (`pages/1_🦙_Model_Settings.py`): Configure Ollama models and parameters
 3. **RAG Config** (`pages/2_🔗_RAG_Config.py`): Set up document processing and retrieval settings
 4. **Chat** (`pages/3_💬_Chat.py`): Interactive chat interface with RAG capabilities
 5. **Deep Research** (`pages/4_🔍_DeepResearch.py`): Comprehensive research tool for in-depth topic exploration
+6. **AI Debate** (`pages/5_🗣️_Debate.py`): Dynamic debate platform for AI model interactions
 
 ## Setup Guide
 
@@ -170,6 +171,20 @@ The application consists of five main pages:
 - Markdown-formatted research reports
 - Automatic source tracking and citation
 - Progress tracking and status updates
+
+### AI Debate Arena
+- Dynamic debates between two AI models on any topic
+- Customizable model selection for each debater and judge
+- Configurable debate parameters:
+  - Number of turns (1-10)
+  - Response length
+  - Model parameters (temperature, context window, max tokens)
+- Personalized bot stances with customizable system prompts
+- Real-time web research integration for fact-based arguments
+- Unbiased debate analysis and winner determination
+- Markdown-formatted responses for better readability
+- Progress tracking and status updates
+- Beautiful UI with distinct styling for each debater
 
 ### Chat History
 - Conversations are automatically saved in SQLite database
