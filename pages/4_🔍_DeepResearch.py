@@ -236,7 +236,7 @@ YOU MUST RESPOND WITH A THIS EXACT STRUCTURE:
 "Write your detailed summary here using markdown formatting",
 "key_points":
 "First key point goes here"
-"Second key point goes here"
+        "Second key point goes here"
 
 REQUIREMENTS:
 1. No markdown code blocks or formatting
@@ -608,8 +608,8 @@ async def research_subtopic(subtopic, search_tools, synthesis_chain, main_topic,
             "topic": subtopic,
             "results": summaries_subtopic
         }))["text"]
-
-        # Clean up the debug container
+            
+            # Clean up the debug container
         status_text.empty()
         
         return synthesis_result, combined_results  # Return both the synthesis and webpage contents
@@ -686,7 +686,7 @@ async def conduct_research(topic):
                 input_variables=["topic", "summaries"]
             )
         )
-        
+            
         # Step 1: Create research directory structure
         if not output_folder:
             st.error("Please specify an output folder path")
@@ -767,7 +767,7 @@ async def conduct_research(topic):
                     "subtopic": subtopic,
                     "summary": result,
                 })
-                            
+            
             progress = 0.2 + (0.6 * (idx / len(subtopics)))
             progress_bar.progress(progress)
         
@@ -778,12 +778,12 @@ async def conduct_research(topic):
                 "topic": topic,
                 "summaries": json.dumps(all_summaries)  # Pass complete summary objects
             }))["text"]
-
-            # Write final overview
-            overview_file = os.path.join(research_dir, "research_overview.md")            
+                
+                # Write final overview
+                overview_file = os.path.join(research_dir, "research_overview.md")
             write_markdown_file(overview_file, final_result)
-            
-            # Update session state with results
+                
+                # Update session state with results
             st.session_state.research_summary = final_result
             st.session_state.sources = list(dict.fromkeys(all_sources)) 
                 
