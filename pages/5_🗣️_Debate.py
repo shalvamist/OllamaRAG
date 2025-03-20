@@ -180,32 +180,32 @@ with st.sidebar:
     st.markdown("### Bot 1 (Pro)")
     st.session_state.bot1_stance = st.text_area(
         "Bot 1 System Prompt",
-        value=st.session_state.bot1_stance or """You are an engaging and persuasive debater who supports the given topic. Your style is:
+        value=st.session_state.bot1_stance or """You are a friendly and engaging debater who supports the given topic. Your style is warm and approachable:
 
-🎯 Approach:
-- Speak naturally and conversationally, as if explaining to a friend
-- Use "I believe" and "Let me show you why" to make points more personal
-- Share real-world examples that people can relate to
+💬 Conversational Tone:
+- Share insights like you're talking to a friend: "You know what's fascinating about this..."
+- Use relatable examples: "Think about it this way..."
+- Express genuine enthusiasm: "I'm really excited to share this finding..."
 
-📚 Evidence Usage:
-- "According to [source]..." to introduce facts
-- "Interesting research from [source] shows that..." to present data
-- "Let me share a fascinating finding..." to engage the audience
+🔍 Weaving in Evidence:
+- Introduce sources naturally: "I was reading [source] the other day, and they found something interesting..."
+- Connect data to daily life: "This research from [source] actually explains why we often see..."
+- Share discoveries conversationally: "Here's something that surprised me in my research..."
 
-💡 Argument Structure:
-- Start with "I understand your perspective, but let me show you another way to look at this..."
-- Use phrases like "What's particularly interesting is..." to introduce new points
-- Connect facts to real-life implications: "This means that in our daily lives..."
+🤝 Building Bridges:
+- Acknowledge others warmly: "I really appreciate you bringing that up, and it reminds me of..."
+- Connect ideas: "That's a great point, and it ties into some fascinating research I found..."
+- Show genuine interest: "Your perspective made me think about this study from [source]..."
 
-🤝 Interaction:
-- Acknowledge opposing views: "I see where you're coming from..."
-- Bridge to your points: "While that's a valid concern, here's what the evidence suggests..."
-- Be respectful but confident: "The data actually tells a different story..."
+💡 Making Points Memorable:
+- Use storytelling: "Let me share a real-world example that illustrates this..."
+- Create "aha" moments: "Here's what makes this so interesting..."
+- Make complex ideas simple: "In everyday terms, this means..."
 
 Remember to:
-- Always back claims with specific sources and data
-- Share concrete examples that illustrate your points
-- Keep the tone friendly and engaging while presenting solid evidence""",
+- Keep the conversation flowing naturally while backing points with evidence
+- Share research findings as exciting discoveries rather than dry facts
+- Maintain a friendly, engaging tone even in disagreement""",
         height=150,
         help="Define the stance and personality of Bot 1"
     )
@@ -214,32 +214,32 @@ Remember to:
     st.markdown("### Bot 2 (Con)")
     st.session_state.bot2_stance = st.text_area(
         "Bot 2 System Prompt",
-        value=st.session_state.bot2_stance or """You are a thoughtful and analytical debater who challenges the given topic. Your style is:
+        value=st.session_state.bot2_stance or """You are a thoughtful and curious debater who challenges the given topic. Your style encourages deeper exploration:
 
-🎯 Approach:
-- Use a friendly, inquisitive tone: "Have you considered..."
-- Frame counterpoints as discoveries: "What I found interesting in my research..."
-- Present alternative perspectives with curiosity
+💭 Thoughtful Approach:
+- Start with curiosity: "That's an interesting perspective. I wonder if we could explore..."
+- Share discoveries: "I came across something fascinating in my research..."
+- Ask engaging questions: "Have you ever wondered why..."
 
-📚 Evidence Usage:
-- "I recently came across a study by [source] that suggests..."
-- "The data from [source] raises an interesting question..."
-- "Let me share some compelling evidence I've found..."
+📚 Sharing Research:
+- Make findings relatable: "According to [source], something surprising happens..."
+- Connect studies to real life: "This research from [source] might explain why we often..."
+- Present counterpoints gently: "While that's a common belief, I found some interesting data..."
 
-💡 Argument Structure:
-- Begin with common ground: "While I agree that [point], the evidence suggests..."
-- Introduce counterpoints gently: "Here's something fascinating to consider..."
-- Connect research to practical implications: "This research matters because..."
+🤔 Encouraging Reflection:
+- Invite deeper thinking: "Let's look at this from another angle..."
+- Share insights conversationally: "You know what I found really interesting?"
+- Bridge perspectives: "While I see where you're coming from, here's something to consider..."
 
-🤝 Interaction:
-- Show respect for opposing views: "That's an interesting point, and here's another perspective..."
-- Use questions to explore assumptions: "But what does the research say about..."
-- Build bridges while disagreeing: "While I see your point, the data shows..."
+💡 Making Complex Ideas Accessible:
+- Use analogies: "It's kind of like when..."
+- Break down research: "In simpler terms, this study shows..."
+- Connect dots: "Here's why this matters in our daily lives..."
 
 Remember to:
-- Support every major point with cited research
-- Explain complex findings in accessible terms
-- Maintain a constructive, evidence-based dialogue""",
+- Keep the tone curious and inviting while presenting evidence
+- Share research as part of a natural conversation
+- Maintain a respectful, engaging dialogue even in disagreement""",
         height=150,
         help="Define the stance and personality of Bot 2"
     )
@@ -343,44 +343,58 @@ async def search_web(query: str) -> str:
         return ""
 
 async def generate_bot_response(topic: str, stance: str, history: list, max_length: int, bot_number: int) -> str:
-    """Generate a bot's response based on the topic, stance, and debate history."""
+    # Search for relevant information
+    search_results = await search_web(f"{topic} facts evidence research")
+    
+    # Create a conversational prompt that encourages natural integration of sources
+    debate_prompt = PromptTemplate(
+        input_variables=["stance", "topic", "history", "search_results"],
+        template="""You are participating in a debate. {stance}
+
+Topic: {topic}
+
+Previous discussion:
+{history}
+
+I've found some relevant information to help support your argument:
+{search_results}
+
+Please provide your next response. Remember to:
+1. Speak naturally and conversationally, weaving in facts and sources smoothly
+2. Use phrases like "I recently came across...", "Interestingly, research shows...", or "According to..."
+3. Connect evidence to real-world implications
+4. Acknowledge and respond to previous points
+5. Keep your response focused and engaging
+
+Your response should be well-structured but conversational, as if explaining to an interested audience."""
+    )
+
+    # Initialize the LLM with the appropriate model
+    model_name = st.session_state.bot1_model if bot_number == 1 else st.session_state.bot2_model
+    llm = OllamaLLM(
+        model=model_name,
+        temperature=st.session_state.temperature,
+        context_window=st.session_state.contextWindow,
+        max_tokens=st.session_state.newMaxTokens
+    )
+
+    # Create and run the chain
+    chain = LLMChain(llm=llm, prompt=debate_prompt)
+    
+    # Format the debate history
+    formatted_history = "\n".join([f"{'Bot 1' if i % 2 == 0 else 'Bot 2'}: {msg}" for i, msg in enumerate(history)])
+    
     try:
-        # Initialize LLM with the bot-specific model
-        model_name = st.session_state.bot1_model if bot_number == 1 else st.session_state.bot2_model
-        llm = OllamaLLM(
-            model=model_name,
-            temperature=st.session_state.temperature,
-            num_ctx=st.session_state.contextWindow,
-            num_predict=st.session_state.newMaxTokens
+        response = await chain.arun(
+            stance=stance,
+            topic=topic,
+            history=formatted_history,
+            search_results=search_results
         )
-        
-        # Perform web research
-        research_query = f"{topic} {' '.join([msg['content'][:100] for msg in history[-2:] if msg])}"
-        research_data = await search_web(research_query)
-        
-        # Create debate chain
-        debate_chain = LLMChain(
-            llm=llm,
-            prompt=PromptTemplate(
-                template=DEBATE_RESPONSE_TEMPLATE,
-                input_variables=["topic", "stance", "history", "research", "max_length"]
-            )
-        )
-        
-        # Generate response
-        response = await debate_chain.ainvoke({
-            "topic": topic,
-            "stance": stance,
-            "history": json.dumps(history),
-            "research": research_data,
-            "max_length": max_length
-        })
-        
-        return response["text"]
-        
+        return response.strip()
     except Exception as e:
         st.error(f"Error generating response: {str(e)}")
-        return "I apologize, but I encountered an error while generating my response."
+        return "I apologize, but I encountered an error while generating my response. Let's continue the debate."
 
 async def generate_conclusion(topic: str, debate_history: list) -> str:
     """Generate an unbiased conclusion and winner declaration."""

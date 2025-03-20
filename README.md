@@ -23,132 +23,63 @@
 <!-- ABOUT THE PROJECT -->
 ## 🌟 About The Project
 
-OllamaRAG brings the power of Retrieval-Augmented Generation (RAG) to your local environment, seamlessly integrating with Ollama's local LLMs. It's designed to make document-enhanced AI conversations accessible and efficient.
+OllamaRAG is your all-in-one solution for document-enhanced AI conversations, research automation, and interactive AI debates - all running locally on your machine!
 
-### What Makes OllamaRAG Special?
+## ✨ Key Features
 
-- 🏠 **Fully Local Operation**: All processing happens on your machine, ensuring data privacy
-- 🔄 **Hybrid Search**: Combines vector similarity and keyword matching for better context retrieval
-- 💾 **Persistent Memory**: Save and manage conversation history across sessions
-- 📊 **Smart Document Processing**: Intelligent chunking and embedding of your documents
-- 🎯 **Context-Aware Responses**: LLM outputs enhanced with relevant document snippets
-- 🔍 **Deep Research Engine**: Automated, multi-source research with Wikipedia integration
-- 📝 **Structured Analysis**: AI-powered topic decomposition and synthesis
-- 🌐 **Web Intelligence**: Smart web content extraction and evaluation
+- 🏠 **100% Local Processing** - Complete data privacy with local LLM integration
+- 🤖 **AI Debate Arena** - Watch AI models debate topics with fact-based arguments
+- 🔍 **Smart Research Engine** - Automated multi-source research with topic analysis
+- 💬 **RAG-Enhanced Chat** - Context-aware conversations using your documents
+- 📊 **Intelligent Processing** - Advanced document chunking and hybrid search
+- 💾 **Persistent Memory** - Save and manage conversations across sessions
 
-### Built For Everyone
+## 🚀 Quick Start
 
-- 🔬 **Researchers**: Quickly query, analyze, and synthesize information from multiple sources
-- 💼 **Professionals**: Enhance productivity with AI-powered research and document analysis
-- 🎓 **Students**: Learn and explore topics with comprehensive research capabilities
-- 🧪 **Developers**: Experiment with RAG and research automation implementations
+### Prerequisites
+- Python 3.8+
+- [Ollama](https://ollama.ai) installed and running
 
-### Built With
-
-OllamaRAG leverages the best open-source technologies:
-- 🦙 [Ollama](https://ollama.ai/) - Run LLMs locally
-- 🔗 [LangChain](https://www.langchain.com/) - Build LLM applications
-- 🌊 [Streamlit](https://streamlit.io/) - Create web interfaces
-- 🎨 [ChromaDB](https://www.trychroma.com/) - Embed and store documents
-
-## Try it on Google Colab! 🚀
-
-Want to test OllamaRAG without any local setup? We've got you covered! 
-
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://github.com/shalvamist/OllamaRAG/blob/main/OllamaRAG.ipynb)
-
-Our Colab notebook offers:
-- 🔥 **Instant Setup**: Get started in minutes with zero local installation
-- 📚 **Interactive Tutorial**: Step-by-step guide to all features
-- 📖 Learning about RAG implementations
-- 🧪 Quick prototyping and testing
-
-Click the badge above to launch the notebook and start exploring! 
-
-> Note: The Colab notebook includes detailed installation steps and usage examples to help you get the most out of OllamaRAG.
-
-## Prerequisites
-
-1. **Python 3.8+** installed on your system
-2. **Ollama** installed and running on your system
-   - Install from [Ollama's official website](https://ollama.ai)
-   - Make sure the Ollama service is running before starting the app
-
-## Installation
-
-1. Clone the repository:
+### Setup
 ```bash
+# Clone and enter directory
 git clone [repository-url]
 cd OllamaRAG
-```
 
-2. Create and activate a virtual environment (recommended):
-```bash
-# Windows
+# Create virtual environment
 python -m venv venv
-.\venv\Scripts\activate
+source venv/bin/activate  # or .\venv\Scripts\activate on Windows
 
-# Linux/Mac
-python -m venv venv
-source venv/bin/activate
-```
-
-3. Install required packages:
-```bash
+# Install dependencies
 pip install -r requirements.txt
-```
-## Running the Application
 
-1. Make sure Ollama is running on your system
-2. Start the Streamlit application:
-```bash
+# Run the app
 streamlit run Home.py
 ```
 
-## Application Structure
+## 🎯 Main Components
 
-The application consists of six main pages:
+1. **Model Settings** - Configure your Ollama models
+2. **RAG Config** - Set up document processing
+3. **Chat** - Interactive RAG-enhanced conversations
+4. **Deep Research** - Automated research and analysis
+5. **AI Debate** - Dynamic debates between AI models
 
-1. **Home** (`Home.py`): Landing page with system status and quick start guide
-2. **Model Settings** (`pages/1_🦙_Model_Settings.py`): Configure Ollama models and parameters
-3. **RAG Config** (`pages/2_🔗_RAG_Config.py`): Set up document processing and retrieval settings
-4. **Chat** (`pages/3_💬_Chat.py`): Interactive chat interface with RAG capabilities
-5. **Deep Research** (`pages/4_🔍_DeepResearch.py`): Comprehensive research tool for in-depth topic exploration
-6. **AI Debate** (`pages/5_🗣️_Debate.py`): Dynamic debate platform for AI model interactions
+## 🛠️ Built With Amazing Tech
 
-## Setup Guide
+- [Ollama](https://ollama.ai) - Local LLM runtime
+- [LangChain](https://www.langchain.com) - LLM application framework
+- [Streamlit](https://streamlit.io) - Web interface
+- [ChromaDB](https://www.trychroma.com) - Vector database
 
-### 1. Model Setup
+## 📝 License
 
-1. Go to the "Model Settings" page
-2. Select or download an Ollama model
-   - For general use, we recommend starting with `llama2`
-   - For embedding, we recommend `nomic-embed-text`
-3. Configure model parameters:
-   - Temperature (default: 1.0)
-   - Context Window (default: 2048)
-   - Max Tokens (default: 2048)
-4. Set your system prompt
-5. Click "Apply Settings"
+MIT License - Free to use, modify, and distribute. No liability or warranty provided.
 
-### 2. RAG Configuration
-
-1. Navigate to the "RAG Config" page
-2. Select an embedding model
-3. Configure document processing:
-   - Chunk size (default: 1000)
-   - Chunk overlap (default: 200)
-   - Retrieved documents count (default: 3)
-4. Upload PDF documents
-5. Click "Rebuild Database"
-
-### 3. Start Chatting
-
-1. Go to the "Chat" page
-2. Start asking questions
-   - The system will retrieve relevant context from your documents
-   - Responses are generated using your selected Ollama model
-   - Chat history is automatically saved
+---
+[Explore Features](https://github.com/yourusername/OllamaRAG#features) · 
+[Report Bug](https://github.com/yourusername/OllamaRAG/issues) · 
+[Request Feature](https://github.com/yourusername/OllamaRAG/issues)
 
 ## Features in Detail
 
@@ -235,27 +166,3 @@ This project is built upon the amazing work of several open-source projects:
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
-
-## License
-
-MIT License
-
-Copyright (c) 2024 OllamaRAG
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
