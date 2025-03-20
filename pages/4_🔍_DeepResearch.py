@@ -2,18 +2,17 @@ import streamlit as st
 from langchain_ollama import OllamaLLM
 from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
+
 from langchain_community.tools import DuckDuckGoSearchResults
 from langchain_community.document_loaders import WebBaseLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_community.retrievers import WikipediaRetriever
+
 import os
 import asyncio
 import json
-import aiohttp
 import re
 from urllib.parse import urlparse
-from bs4 import BeautifulSoup, SoupStrainer
-import requests
-from typing import List, Dict, Any
+from bs4 import SoupStrainer
 
 # Set page config
 st.set_page_config(
@@ -180,17 +179,13 @@ YOUR QUERY:"""
 SUBTOPICS_TEMPLATE = """Generate a list of comprehensive subtopics for detailed research on the given topic.
 
 TOPIC: {topic}
-NUMBER OF SUBTOPICS: {num_subtopics}
 
 INSTRUCTIONS:
 1. Analyze the topic and break it down into logical subtopics
 2. Each subtopic should be specific and focused
 3. Include both fundamental and advanced aspects
 4. Ensure coverage is comprehensive
-5. Return ONLY a JSON object with a "subtopics" array
-6. Each subtopic should be a clear, concise phrase
-7. The number of subtopics should be equal to the number of subtopics you are given
-8. The subtopics should be unique and not repeat themselves
+5. Each subtopic should be a clear, concise phrase
 
 EXAMPLE RESPONSE:
 {{
@@ -204,7 +199,6 @@ EXAMPLE RESPONSE:
 }}
 
 YOUR RESPONSE MUST BE A VALID JSON OBJECT WITH THE EXACT STRUCTURE SHOWN ABOVE.
-YOUR RESPONSE MUST INCLUDE THE EXACT NUMBER OF SUBTOPICS YOU ARE GIVEN.
 DO NOT include any additional text, formatting, or explanations.
 DO NOT use newlines within the JSON structure.
 
@@ -261,12 +255,10 @@ IMPORTANT: You MUST include ALL THREE required fields in your response:
 3. "conclusions" - A final summary of implications and recommendations
 
 YOUR RESPONSE MUST BE in the following format:
-"## Research Overview\\n\\nComprehensive overview text here...\\n\\n### Key Themes\\n* Theme 1 (from Subtopic X)\\n* Theme 2 (from Subtopics Y and Z)\\n\\n### Significant Findings\\nDetailed findings here with subtopic references...",
-"key_findings"
-"Major finding 1 (from Subtopic A)",
-"Major finding 2 (from Subtopics B and C)",
-"Major finding 3 (synthesized from multiple subtopics)"
-"Conclusions": "Final conclusions and implications of the research, referencing key subtopics..."
+"## Research Overview\\n\\nComprehensive overview text here...\\n\\n
+### Key Themes\\n* Theme 1 (from Subtopic X)\\n* Theme 2 (from Subtopics Y and Z)\\n\\n
+### Significant Findings\\nDetailed findings here with subtopic references...",
+###"Conclusions": "Final conclusions and implications of the research, referencing key subtopics..."
 
 REQUIREMENTS:
 1. ALL THREE FIELDS MUST BE PRESENT AND NON-EMPTY
@@ -448,7 +440,7 @@ def clean_json_string(json_str: str) -> str:
         
         return json_str.strip()
 
-async def research_subtopic(subtopic, search_tool, synthesis_chain, main_topic, status_text):
+async def research_subtopic(subtopic, search_tool, wikipedia_retriever, synthesis_chain, main_topic, status_text):
     """Conduct research on a specific subtopic."""
     try:
         # Initialize LLM chains
@@ -500,19 +492,34 @@ async def research_subtopic(subtopic, search_tool, synthesis_chain, main_topic, 
             # Perform web search with contextual query
             search_results = search_tool.run(search_query)
             
+            # Get Wikipedia results
+            status_text.text("Retrieving Wikipedia results...")
+            wikipedia_results = wikipedia_retriever.get_relevant_documents(search_query)
+            
             # Extract URLs from search results
             urls = re.findall(r'https?://[^\s<>"]+|www\.[^\s<>"]+', search_results)
             status_text.text(f"Found URLs: {urls}")
             
             # Fetch and process content from each URL
             detailed_results = []
-            for url in urls:  # Limit to first 3 URLs to avoid overloading
+            
+            # Process Wikipedia results first
+            for wiki_doc in wikipedia_results:
+                detailed_results.append({
+                    "url": f"Wikipedia: {wiki_doc.metadata.get('title', 'Unknown Article')}",
+                    "content": wiki_doc.page_content,
+                    "source": "wikipedia"
+                })
+            
+            # Process web URLs
+            for url in urls:
                 status_text.text(f"Processing URL: {url}")
                 content = await fetch_and_process_url(url, status_text)
                 if content:
                     detailed_results.append({
                         "url": url,
-                        "content": content
+                        "content": content,
+                        "source": "web"
                     })
             
             # Combine search results with detailed content
@@ -522,7 +529,7 @@ async def research_subtopic(subtopic, search_tool, synthesis_chain, main_topic, 
             for result in detailed_results:
                 # Evaluate combined results
                 try:
-                    status_text.text(f"Evaluating search results for {result['url']}")
+                    status_text.text(f"Evaluating {'Wikipedia' if result['source'] == 'wikipedia' else 'web'} content from {result['url']}")
                     evaluation_result = (await evaluation_chain.ainvoke({
                         "topic": subtopic,
                         "results": result['content']
@@ -534,15 +541,13 @@ async def research_subtopic(subtopic, search_tool, synthesis_chain, main_topic, 
                     if evaluation_result["sufficient_data"]:
                         status_text.text(f"Found sufficient data in {result['url']} - adding to combined results")
                         combined_results.append(result)
-                        # Synthesize findings using combined results
-                        summaries_subtopic += subtopic + "\n\n\n " + (await synthesis_chain.ainvoke({
-                            "topic": subtopic,
-                            "results": result['content']
-                        }))["text"]
+                        # Add to summaries with source indication
+                        source_prefix = "[Wikipedia] " if result['source'] == 'wikipedia' else "[Web] "
+                        summaries_subtopic += f"{source_prefix}{subtopic}\n\n\n{result['content']}\n\n"
 
                 except Exception as e:
                     st.error(f"Error evaluating search results: {str(e)}")
-                    break
+                    continue
                 
         status_text.text(f"Synthesizing findings for {subtopic}")
         # Synthesize findings using combined results
@@ -579,7 +584,7 @@ async def conduct_research(topic):
         # Initialize the search tool (DuckDuckGo only)
         search_tool = DuckDuckGoSearchResults()
         search_news = DuckDuckGoSearchResults(backend="news")
-        
+        wikipedia_retriever = WikipediaRetriever()
         # Initialize the LLM and chains
         llm = OllamaLLM(
             model=st.session_state.ollama_model,
@@ -587,9 +592,17 @@ async def conduct_research(topic):
             num_ctx=st.session_state.contextWindow,
             num_predict=st.session_state.newMaxTokens
         )
+
+        llm_jason = OllamaLLM(
+            model=st.session_state.ollama_model,
+            temperature=st.session_state.temperature,
+            num_ctx=st.session_state.contextWindow,
+            num_predict=st.session_state.newMaxTokens,
+            format="json",
+        )
         
         subtopics_chain = LLMChain(
-            llm=llm,
+            llm=llm_jason,
             prompt=PromptTemplate(
                 template=SUBTOPICS_TEMPLATE,
                 input_variables=["topic"]
@@ -660,11 +673,11 @@ async def conduct_research(topic):
         # Step 3: Research each subtopic
         all_summaries = []
         all_sources = []  # Track all sources across subtopics
-        for idx, subtopic in enumerate(subtopics, 1):
+        for idx, subtopic in enumerate(subtopics[:st.session_state.num_subtopics], 1):
             status_text.text(f"Researching subtopic {idx}/{len(subtopics)}: {subtopic}")
             
             # Research the subtopic with main topic context
-            result, webpage_contents = await research_subtopic(subtopic, search_tool, synthesis_chain, topic, subtopic_status)
+            result, webpage_contents = await research_subtopic(subtopic, search_tool, wikipedia_retriever, synthesis_chain, topic, subtopic_status)
 
             if result:
                 # Create subtopic file
@@ -708,12 +721,6 @@ async def conduct_research(topic):
             overview_file = os.path.join(research_dir, "research_overview.md")
             overview_content = f"# Research Overview: {topic}\n\n"
             overview_content += final_result + "\n\n"
-            
-            # # Add all sources used
-            # overview_content += "\n\n## Sources Used\n\n"
-            # unique_sources = list(dict.fromkeys(all_sources))  # Remove duplicates while preserving order
-            # for source in unique_sources:
-            #     overview_content += f"- {source}\n"
             
             write_markdown_file(overview_file, overview_content)
             

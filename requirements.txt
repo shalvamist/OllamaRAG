@@ -13,3 +13,4 @@ beautifulsoup4
 aiohttp
 requests
 urllib3
+wikipedia
