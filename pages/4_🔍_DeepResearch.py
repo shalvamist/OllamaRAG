@@ -2,12 +2,18 @@ import streamlit as st
 from langchain_ollama import OllamaLLM
 from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
-from langchain.tools import DuckDuckGoSearchRun
-from langchain.utilities import GoogleSearchAPIWrapper
-from langchain.tools import Tool
+from langchain_community.tools import DuckDuckGoSearchResults
+from langchain_community.document_loaders import WebBaseLoader
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 import os
 import asyncio
 import json
+import aiohttp
+import re
+from urllib.parse import urlparse
+from bs4 import BeautifulSoup, SoupStrainer
+import requests
+from typing import List, Dict, Any
 
 # Set page config
 st.set_page_config(
@@ -66,6 +72,8 @@ if 'research_in_progress' not in st.session_state:
     st.session_state.research_in_progress = False
 if 'iteration_count' not in st.session_state:
     st.session_state.iteration_count = 0
+if 'max_search_attempts' not in st.session_state:
+    st.session_state.max_search_attempts = 3
 
 # Title and description
 st.title("🔍 Deep Research")
@@ -112,27 +120,10 @@ with st.sidebar:
         st.error("⚠️ Output folder path is required to proceed with research")
     
     # Search Provider Selection
-    search_provider = st.selectbox(
-        "Search Provider",
-        ["DuckDuckGo", "Google", "Brave"],
-        help="Select the web search provider"
-    )
+    search_provider = "DuckDuckGo"  # Default and only option
+    st.info("Using DuckDuckGo as the search provider")
     
-    # API Key Configuration
-    if search_provider in ["Google", "Brave"]:
-        with st.expander("API Configuration", expanded=True):
-            if search_provider == "Google":
-                google_api_key = st.text_input("Google API Key", type="password", help="Enter your Google Custom Search API Key")
-                google_cse_id = st.text_input("Google CSE ID", type="password", help="Enter your Google Custom Search Engine ID")
-                if google_api_key and google_cse_id:
-                    os.environ["GOOGLE_API_KEY"] = google_api_key
-                    os.environ["GOOGLE_CSE_ID"] = google_cse_id
-            elif search_provider == "Brave":
-                brave_api_key = st.text_input("Brave API Key", type="password", help="Enter your Brave Search API Key")
-                if brave_api_key:
-                    os.environ["BRAVE_API_KEY"] = brave_api_key
-    
-    max_iterations = st.slider(
+    st.session_state.max_iterations = st.slider(
         "Maximum Research Iterations",
         min_value=1,
         max_value=20,
@@ -152,16 +143,17 @@ with st.sidebar:
 # Research prompt templates
 SEARCH_QUERY_TEMPLATE = """Generate a search query for web research.
 
-TOPIC: {topic}
-ITERATION: {iteration}
-GAPS: {gaps}
+MAIN TOPIC: {main_topic}
+SUBTOPIC: {topic}
 
-RULES:
-1. Return ONLY the search query as plain text
-2. NO JSON, NO explanations, NO formatting
-3. Keep it under 10 words
-4. Make it specific and focused
-5. Do not use quotes or special characters
+INSTRUCTIONS:
+1. Create a search query that combines the main topic and subtopic context
+2. Return ONLY the search query as plain text
+3. NO JSON, NO explanations, NO formatting
+4. Keep it under 15 words
+5. Make it specific and focused
+6. Include both main topic and subtopic aspects
+7. Do not use quotes or special characters
 
 BAD EXAMPLES:
 - {{\"query\": \"quantum computing basics\"}}
@@ -169,42 +161,11 @@ BAD EXAMPLES:
 - <thinking>Let me generate...</thinking>
 
 GOOD EXAMPLES:
-quantum computing applications in cryptography
-natural remedies for reducing inflammation
-python async programming best practices
+- quantum computing cryptography applications in cybersecurity
+- artificial intelligence machine learning applications healthcare diagnosis
+- renewable energy solar power efficiency improvements residential systems
 
 YOUR QUERY:"""
-
-SYNTHESIS_TEMPLATE = """You are a research synthesis AI. Create a structured research summary in JSON format.
-
-TOPIC: {topic}
-SEARCH RESULTS: {results}
-PREVIOUS_SUMMARY: {previous_summary}
-
-INSTRUCTIONS:
-1. Analyze the search results thoroughly
-2. Create a comprehensive summary with these sections:
-   - Introduction/Overview
-   - Key Findings
-   - Detailed Analysis
-   - Conclusions
-3. Use proper markdown headings and formatting
-4. Include specific facts and data points
-5. Cite sources for important claims
-6. IMPORTANT: Extract and include ONLY valid web URLs from the search results in the sources list
-
-YOUR RESPONSE MUST BE A SINGLE JSON OBJECT WITH THIS EXACT STRUCTURE:
-{
-    "summary": "## Research Summary\\n\\n### Overview\\nBrief introduction to the topic\\n\\n### Key Findings\\n* Important point 1\\n* Important point 2\\n* Important point 3\\n\\n### Detailed Analysis\\nIn-depth discussion of findings\\n\\n### Conclusions\\nMain takeaways and implications",
-    "gaps": [
-        "Specific unanswered question 1",
-        "Specific unanswered question 2"
-    ],
-    "sources": [
-        "https://example.com/article1",
-        "https://example.com/article2"
-    ]
-}"""
 
 SUBTOPICS_TEMPLATE = """Generate a list of comprehensive subtopics for detailed research on the given topic.
 
@@ -247,33 +208,25 @@ INSTRUCTIONS:
 4. Include specific data points and facts
 5. Cite sources for important claims
 
-YOU MUST RESPOND WITH A VALID JSON OBJECT USING THIS EXACT STRUCTURE:
-{{
-    "summary": "Write your detailed summary here using markdown formatting",
-    "sources": [
-        "https://example1.com",
-        "https://example2.com"
-    ],
-    "key_points": [
-        "First key point goes here",
-        "Second key point goes here"
-    ]
-}}
+YOU MUST RESPOND WITH A THIS EXACT STRUCTURE:
+"summary": 
+"Write your detailed summary here using markdown formatting",
+"key_points":
+"First key point goes here"
+"Second key point goes here"
 
 REQUIREMENTS:
-1. The response must be ONLY the JSON object
-2. No other text before or after the JSON
-3. No markdown code blocks or formatting
-4. All fields must be present
-5. Sources must be valid URLs
-6. Use proper JSON formatting with escaped quotes
+1. No markdown code blocks or formatting
+2. All fields must be present
+
 
 EXAMPLE RESPONSE:
-{{
-    "summary": "## Topic Overview\\n\\nThis is a detailed summary of the findings...\\n\\n### Key Insights\\n1. First insight\\n2. Second insight",
-    "sources": ["https://example.com/article1", "https://example.com/article2"],
-    "key_points": ["Major finding 1", "Major finding 2"]
-}}"""
+"summary": 
+"## Topic Overview\\n\\nThis is a detailed summary of the findings...\\n\\n### Key Insights\\n1. First insight\\n2. Second insight",
+"key_points":
+"Major finding 1"
+"Major finding 2"
+"""
 
 FINAL_SYNTHESIS_TEMPLATE = """Create a comprehensive research overview based on all subtopic summaries.
 
@@ -286,25 +239,70 @@ INSTRUCTIONS:
 3. Note significant discoveries
 4. Address gaps and limitations
 5. Draw meaningful conclusions
+6. Reference subtopics when discussing findings
+
+IMPORTANT: You MUST include ALL THREE required fields in your response:
+1. "overview" - A detailed markdown-formatted overview of all findings
+2. "key_findings" - An array of major findings with their sources
+3. "conclusions" - A final summary of implications and recommendations
+
+YOUR RESPONSE MUST BE in the following format:
+"## Research Overview\\n\\nComprehensive overview text here...\\n\\n### Key Themes\\n* Theme 1 (from Subtopic X)\\n* Theme 2 (from Subtopics Y and Z)\\n\\n### Significant Findings\\nDetailed findings here with subtopic references...",
+"key_findings"
+"Major finding 1 (from Subtopic A)",
+"Major finding 2 (from Subtopics B and C)",
+"Major finding 3 (synthesized from multiple subtopics)"
+"Conclusions": "Final conclusions and implications of the research, referencing key subtopics..."
+
+REQUIREMENTS:
+1. ALL THREE FIELDS MUST BE PRESENT AND NON-EMPTY
+2. The overview field should use markdown formatting
+3. Reference specific subtopics when discussing findings
+4. Maintain clear connection between findings and their sources
+5. The key_findings array must contain at least 3 findings
+6. Each finding should reference its source subtopic(s)
+
+RESPONSE:"""
+
+SEARCH_RESULTS_EVALUATION_TEMPLATE = """Evaluate the quality and relevance of these search results.
+
+TOPIC: {topic}
+SEARCH_RESULTS: {results}
+
+INSTRUCTIONS:
+1. Analyze the provided content for:
+   - Relevance to the topic
+   - Information density
+   - Quality of sources
+   - Comprehensiveness
+2. Return ONLY a JSON object with your evaluation
+3. If the results are not relevant or comprehensive, return false for is_sufficient
+4. If the results are relevant and comprehensive, return true for is_sufficient
+5. Rate the quality of the results from 0-10
+6. Provide 2 reasons for your assessment
 
 YOUR RESPONSE MUST BE A VALID JSON OBJECT WITH THIS EXACT STRUCTURE:
 {{
-    "overview": "## Research Overview\\n\\nComprehensive overview text here...\\n\\n### Key Themes\\n* Theme 1\\n* Theme 2\\n\\n### Significant Findings\\nDetailed findings here...",
-    "key_findings": [
-        "Major finding 1",
-        "Major finding 2",
-        "Major finding 3"
+    "sufficient_data": True/False,
+    "quality_score": 0-10,
+    "reasons": [
+        "Reason 1 for assessment",
+        "Reason 2 for assessment"
     ],
-    "conclusions": "Final conclusions and implications of the research..."
+    "missing_aspects": [
+        "Important aspect not covered 1",
+        "Important aspect not covered 2"
+    ]
 }}
 
 REQUIREMENTS:
-1. The response must be ONLY the JSON object
-2. No other text before or after the JSON
-3. No markdown code blocks or formatting
-4. All three fields must be present
-5. Use proper JSON formatting with escaped quotes
-6. The overview field should use markdown formatting
+1. is_sufficient: Set to true only if results are both relevant and comprehensive
+2. quality_score: Rate from 0-10 where:
+   - 0-3: Poor quality/irrelevant
+   - 4-6: Moderate quality but incomplete
+   - 7-10: High quality and comprehensive
+3. Include at least 2 reasons for your assessment
+4. List missing aspects if quality_score < 7
 
 RESPONSE:"""
 
@@ -341,87 +339,237 @@ def write_markdown_file(filepath, content):
     with open(filepath, 'w', encoding='utf-8') as f:
         f.write(content)
 
-async def research_subtopic(subtopic, search_tool, synthesis_chain):
+async def fetch_and_process_url(url: str, debug_container) -> str:
+    """Fetch and process content from a URL using WebBaseLoader with BeautifulSoup strainer."""
+    try:
+        # Validate URL
+        parsed_url = urlparse(url)
+        if not all([parsed_url.scheme, parsed_url.netloc]):
+            debug_container.warning(f"Invalid URL: {url}")
+            return ""
+
+        bs4_strainer = SoupStrainer(class_=("content-area"))
+        
+        # Initialize WebBaseLoader with BeautifulSoup configuration
+        loader = WebBaseLoader(
+            [url]
+        )
+
+        try:
+            # Use synchronous loading as aload() might not work well with bs_kwargs
+            docs = loader.load()
+            if not docs:
+                # Fallback to loading without strainer if no content found
+                loader = WebBaseLoader(
+                    web_paths=[url],
+                    verify_ssl=True,
+                    continue_on_failure=True,
+                    requests_per_second=2
+                )
+                docs = loader.load()
+                if not docs:
+                    debug_container.warning(f"No content retrieved from: {url}")
+                    return ""
+
+            # Combine all document content
+            content = "\n\n".join(doc.page_content for doc in docs)
+            
+            # Clean up the content
+            content = re.sub(r'\s+', ' ', content).strip()  # Remove excessive whitespace
+            content = re.sub(r'[^\x00-\x7F]+', '', content)  # Remove non-ASCII characters
+
+            return content
+
+        except Exception as e:
+            debug_container.error(f"Error loading content from {url}: {str(e)}")
+            return ""
+
+    except Exception as e:
+        debug_container.error(f"Error processing URL {url}: {str(e)}")
+        return ""
+
+def clean_json_string(json_str: str) -> str:
+    """Clean a JSON string by removing invalid control characters and normalizing whitespace."""
+    try:
+        # First try to parse it as is (in case it's already valid JSON)
+        json.loads(json_str)
+        return json_str
+    except:
+        # If parsing fails, clean up the string
+        # Remove JSON code block markers
+        json_str = re.sub(r'^```json\s*|\s*```$', '', json_str.strip())
+        
+        # Handle newlines in the content while preserving them in strings
+        json_str = re.sub(r'\\n', '__NEWLINE__', json_str)  # Temporarily replace valid \n
+        json_str = re.sub(r'\n\s*', ' ', json_str)  # Remove actual newlines
+        json_str = re.sub(r'__NEWLINE__', '\\n', json_str)  # Restore valid \n
+        
+        # Replace invalid control characters
+        json_str = re.sub(r'[\x00-\x09\x0b\x0c\x0e-\x1F\x7F-\x9F]', '', json_str)
+        
+        # Normalize whitespace (but not inside strings)
+        parts = []
+        in_string = False
+        current = []
+        
+        for char in json_str:
+            if char == '"' and (not current or current[-1] != '\\'):
+                in_string = not in_string
+            
+            if not in_string and char.isspace():
+                if current and not current[-1].isspace():
+                    current.append(' ')
+            else:
+                current.append(char)
+        
+        json_str = ''.join(current)
+        
+        # Ensure proper escaping of quotes
+        json_str = json_str.replace('\\"', '__QUOTE__')
+        json_str = json_str.replace('"', '\\"')
+        json_str = json_str.replace('__QUOTE__', '\\"')
+        
+        # Remove any trailing commas before closing braces/brackets
+        json_str = re.sub(r',(\s*[}\]])', r'\1', json_str)
+        
+        return json_str.strip()
+
+async def research_subtopic(subtopic, search_tool, synthesis_chain, main_topic, status_text):
     """Conduct research on a specific subtopic."""
     try:
-        # Perform web search
-        search_results = search_tool.run(subtopic)
-        
-        # Debug search results
-        debug_container = st.empty()
-        debug_container.text(f"Searching for: {subtopic}")
-        
-        # Synthesize findings
-        synthesis_result = await synthesis_chain.arun(
-            topic=subtopic,
-            results=search_results
+        # Initialize LLM chains
+        llm = OllamaLLM(
+            model=st.session_state.ollama_model,
+            temperature=st.session_state.temperature,
+            num_ctx=st.session_state.contextWindow,
+            num_predict=st.session_state.newMaxTokens
+        )
+
+        llm_jason = OllamaLLM(
+            model=st.session_state.ollama_model,
+            temperature=st.session_state.temperature,
+            num_ctx=st.session_state.contextWindow,
+            num_predict=st.session_state.newMaxTokens,
+            format="json",
         )
         
-        # Clean up the JSON string
-        synthesis_result = synthesis_result.strip()
-        if synthesis_result.startswith('```json'):
-            synthesis_result = synthesis_result[7:]
-        if synthesis_result.endswith('```'):
-            synthesis_result = synthesis_result[:-3]
-        synthesis_result = synthesis_result.strip()
+        # Create search query chain
+        search_query_chain = LLMChain(
+            llm=llm,
+            prompt=PromptTemplate(
+                template=SEARCH_QUERY_TEMPLATE,
+                input_variables=["main_topic", "topic"]
+            )
+        )
         
-        try:
-            # Parse and validate results
-            result_dict = json.loads(synthesis_result)
+        # Create evaluation chain
+        evaluation_chain = LLMChain(
+            llm=llm_jason,
+            prompt=PromptTemplate(
+                template=SEARCH_RESULTS_EVALUATION_TEMPLATE,
+                input_variables=["topic", "results"]
+            )
+        )
+        
+        max_search_attempts = st.session_state.max_search_attempts
+        search_attempt = 0
+        
+        while search_attempt < max_search_attempts:
+            search_attempt += 1
             
-            # Validate required keys and types
-            if not isinstance(result_dict, dict):
-                raise ValueError("Response is not a JSON object")
+            # Generate contextual search query
+            search_query = (await search_query_chain.ainvoke({"main_topic": main_topic, "topic": subtopic}))["text"]
             
-            required_keys = {
-                'summary': str,
-                'sources': list,
-                'key_points': list
-            }
+            # Debug search query
+            status_text.text(f"Search attempt {search_attempt}/{max_search_attempts} for: {search_query}")
             
-            for key, expected_type in required_keys.items():
-                if key not in result_dict:
-                    raise ValueError(f"Missing required key: {key}")
-                if not isinstance(result_dict[key], expected_type):
-                    raise ValueError(f"Invalid type for {key}: expected {expected_type.__name__}, got {type(result_dict[key]).__name__}")
+            # Perform web search with contextual query
+            search_results = search_tool.run(search_query)
             
-            # Validate sources are URLs
-            for source in result_dict['sources']:
-                if not isinstance(source, str) or not (source.startswith('http://') or source.startswith('https://')):
-                    raise ValueError(f"Invalid source URL: {source}")
+            # Extract URLs from search results
+            urls = re.findall(r'https?://[^\s<>"]+|www\.[^\s<>"]+', search_results)
+            status_text.text(f"Found URLs: {urls}")
             
-            # Clean up the debug container
-            debug_container.empty()
+            # Fetch and process content from each URL
+            detailed_results = []
+            for url in urls:  # Limit to first 3 URLs to avoid overloading
+                status_text.text(f"Processing URL: {url}")
+                content = await fetch_and_process_url(url, status_text)
+                if content:
+                    detailed_results.append({
+                        "url": url,
+                        "content": content
+                    })
             
-            return result_dict
-            
-        except json.JSONDecodeError as e:
-            st.error(f"Error parsing JSON response for subtopic '{subtopic}': {str(e)}")
-            st.error("Raw response:")
-            st.code(synthesis_result)
-            return None
-        except ValueError as e:
-            st.error(f"Invalid response format for subtopic '{subtopic}': {str(e)}")
-            st.error("Raw response:")
-            st.code(synthesis_result)
-            return None
+            # Combine search results with detailed content
+            combined_results = []
+            summaries_subtopic = ""
+
+            for result in detailed_results:
+                # Evaluate combined results
+                try:
+                    evaluation_result = (await evaluation_chain.ainvoke({
+                        "topic": subtopic,
+                        "results": result['content']
+                    }))["text"]
+
+                    evaluation_result = json.loads(evaluation_result)
+                    
+                    # Check if results are sufficient
+                    if evaluation_result["sufficient_data"]:
+                        status_text.text(f"Found sufficient data in {result['url']} - adding to combined results")
+                        combined_results.append(result)
+                        # all_content += result['content'] + "\n\n"
+                        summaries_subtopic += subtopic + "\n\n\n " + (await synthesis_chain.ainvoke({
+                            "topic": subtopic,
+                            "results": result['content']
+                        }))["text"]
+
+                except Exception as e:
+                    st.error(f"Error evaluating search results: {str(e)}")
+                    break
+
+        # Synthesize findings using combined results
+        synthesis_result = (await synthesis_chain.ainvoke({
+            "topic": subtopic,
+            "results": summaries_subtopic
+        }))["text"]
+
+        # Clean up the debug container
+        status_text.empty()
+        
+        return synthesis_result, combined_results  # Return both the synthesis and webpage contents
         
     except Exception as e:
         st.error(f"Error researching subtopic '{subtopic}': {str(e)}")
-        return None
+        return None, None
 
 async def conduct_research(topic):
-    """Conducts structured research on the given topic."""
+    """
+    Conducts structured research on the given topic.
+    The research flow is defined as follows:
+    1. Generate subtopics
+    2. Research each subtopic
+    3. Synthesize findings
+    4. Create final synthesis
+    """
     try:
         # Initialize progress tracking
         progress_bar = st.progress(0)
         status_text = st.empty()
+        subtopic_status = st.empty()
         debug_container = st.empty()
         
-        # Initialize LLM chains
+        # Initialize the search tool (DuckDuckGo only)
+        search_tool = DuckDuckGoSearchResults()
+        search_news = DuckDuckGoSearchResults(backend="news")
+        
+        # Initialize the LLM and chains
         llm = OllamaLLM(
             model=st.session_state.ollama_model,
-            temperature=0.1
+            temperature=st.session_state.temperature,
+            num_ctx=st.session_state.contextWindow,
+            num_predict=st.session_state.newMaxTokens
         )
         
         subtopics_chain = LLMChain(
@@ -448,48 +596,6 @@ async def conduct_research(topic):
             )
         )
         
-        # Initialize search tool
-        if search_provider == "DuckDuckGo":
-            search_tool = DuckDuckGoSearchRun()
-        elif search_provider == "Google":
-            if not os.getenv("GOOGLE_API_KEY") or not os.getenv("GOOGLE_CSE_ID"):
-                st.error("Google Search requires API Key and Custom Search Engine ID")
-                return
-            google = GoogleSearchAPIWrapper()
-            search_tool = Tool(
-                name="Google Search",
-                description="Search Google for recent results.",
-                func=google.run
-            )
-        elif search_provider == "Brave":
-            if not os.getenv("BRAVE_API_KEY"):
-                st.error("Brave Search requires an API key")
-                return
-            async def brave_search(query):
-                import aiohttp
-                headers = {
-                    "X-Subscription-Token": os.getenv("BRAVE_API_KEY"),
-                    "Accept": "application/json",
-                }
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(
-                        f"https://api.search.brave.com/res/v1/web/search",
-                        headers=headers,
-                        params={"q": query}
-                    ) as response:
-                        if response.status != 200:
-                            raise Exception(f"Brave Search API error: {response.status}")
-                        data = await response.json()
-                        results = []
-                        for web in data.get("web", {}).get("results", []):
-                            results.append(f"Title: {web['title']}\nURL: {web['url']}\nDescription: {web['description']}\n")
-                        return "\n".join(results)
-            search_tool = Tool(
-                name="Brave Search",
-                description="Search Brave for recent results.",
-                func=lambda x: asyncio.get_event_loop().run_until_complete(brave_search(x))
-            )
-        
         # Step 1: Create research directory structure
         if not output_folder:
             st.error("Please specify an output folder path")
@@ -502,7 +608,7 @@ async def conduct_research(topic):
         # Step 2: Generate subtopics
         status_text.text("Generating research subtopics...")
         try:
-            subtopics_result = await subtopics_chain.arun(topic=topic)
+            subtopics_result = (await subtopics_chain.ainvoke({"topic": topic}))["text"]
             # Clean up the JSON string
             subtopics_result = subtopics_result.strip()
             if subtopics_result.startswith('```json'):
@@ -537,85 +643,68 @@ async def conduct_research(topic):
         
         # Step 3: Research each subtopic
         all_summaries = []
+        all_sources = []  # Track all sources across subtopics
         for idx, subtopic in enumerate(subtopics, 1):
             status_text.text(f"Researching subtopic {idx}/{len(subtopics)}: {subtopic}")
             
-            # Research the subtopic
-            result = await research_subtopic(subtopic, search_tool, synthesis_chain)
+            # Research the subtopic with main topic context
+            result, webpage_contents = await research_subtopic(subtopic, search_tool, synthesis_chain, topic, subtopic_status)
+
             if result:
                 # Create subtopic file
                 subtopic_file = os.path.join(subtopics_dir, f"{sanitize_filename(subtopic)}.md")
-                content = f"# {subtopic}\n\n{result['summary']}\n\n## Sources\n"
-                for source in result['sources']:
-                    content += f"- {source}\n"
-                content += "\n## Key Points\n"
-                for point in result['key_points']:
-                    content += f"- {point}\n"
+                content = f"# {subtopic}\n\n"
+                
+                # Add detailed webpage content first
+                content += "## Webpage Contents\n\n"
+                for webpage in webpage_contents:
+                    content += f"### URL - {webpage['url']}\n\n"
+                    all_sources.append(webpage['url'])
+                    content += "#### Content\n"
+                    content += f"```\n{webpage['content']}\n```\n\n"
+                
+                # Add subtopic summary
+                content += "## Subtopic Summary\n\n"
+                content += f"{result}\n\n"
+                
+                # Add sources and key points
+                content += "## Sources\n"
+                content += f"{all_sources}\n\n"
                 
                 write_markdown_file(subtopic_file, content)
-                all_summaries.append(result)
-            
+                all_summaries.append({
+                    "subtopic": subtopic,
+                    "summary": result,
+                })
+                            
             progress = 0.2 + (0.6 * (idx / len(subtopics)))
             progress_bar.progress(progress)
         
         # Step 4: Create final synthesis
         status_text.text("Creating final research synthesis...")
         try:
-            final_result = await final_synthesis_chain.arun(
-                topic=topic,
-                summaries=json.dumps([s['summary'] for s in all_summaries])
-            )
+            final_result = (await final_synthesis_chain.ainvoke({
+                "topic": topic,
+                "summaries": json.dumps(all_summaries)  # Pass complete summary objects
+            }))["text"]
+
+            # Write final overview
+            overview_file = os.path.join(research_dir, "research_overview.md")
+            overview_content = f"# Research Overview: {topic}\n\n"
+            overview_content += final_result + "\n\n"
             
-            # Clean up the JSON string
-            final_result = final_result.strip()
-            if final_result.startswith('```json'):
-                final_result = final_result[7:]
-            if final_result.endswith('```'):
-                final_result = final_result[:-3]
-            final_result = final_result.strip()
+            # Add all sources used
+            overview_content += "\n\n## Sources Used\n\n"
+            unique_sources = list(dict.fromkeys(all_sources))  # Remove duplicates while preserving order
+            for source in unique_sources:
+                overview_content += f"- {source}\n"
             
-            try:
-                final_data = json.loads(final_result)
+            write_markdown_file(overview_file, overview_content)
+            
+            # Update session state with results
+            st.session_state.research_summary = overview_content
+            st.session_state.sources = unique_sources
                 
-                # Validate required keys and types
-                required_keys = {
-                    'overview': str,
-                    'key_findings': list,
-                    'conclusions': str
-                }
-                
-                for key, expected_type in required_keys.items():
-                    if key not in final_data:
-                        raise ValueError(f"Missing required key: {key}")
-                    if not isinstance(final_data[key], expected_type):
-                        raise ValueError(f"Invalid type for {key}: expected {expected_type.__name__}, got {type(final_data[key]).__name__}")
-                
-                # Write final overview
-                overview_file = os.path.join(research_dir, "research_overview.md")
-                overview_content = f"# Research Overview: {topic}\n\n"
-                overview_content += final_data['overview'] + "\n\n"
-                overview_content += "## Key Findings\n\n"
-                for finding in final_data['key_findings']:
-                    overview_content += f"- {finding}\n"
-                overview_content += "\n## Conclusions\n\n"
-                overview_content += final_data['conclusions']
-                
-                write_markdown_file(overview_file, overview_content)
-                
-                # Update session state with results
-                st.session_state.research_summary = overview_content
-                st.session_state.sources = [source for result in all_summaries for source in result['sources']]
-                
-            except json.JSONDecodeError as e:
-                st.error(f"Error parsing final synthesis JSON: {str(e)}")
-                st.error("Raw response:")
-                st.code(final_result)
-                return
-            except ValueError as e:
-                st.error(f"Invalid final synthesis format: {str(e)}")
-                st.error("Raw response:")
-                st.code(final_result)
-                return
                 
         except Exception as e:
             st.error(f"Error creating final synthesis: {str(e)}")
@@ -629,7 +718,7 @@ async def conduct_research(topic):
         st.success(f"Research completed successfully! Results saved to: {research_dir}")
         
     except Exception as e:
-        st.error(f"Research error: {str(e)}")
+        st.error(f"Research Error: {str(e)}")
     finally:
         st.session_state.research_in_progress = False
 

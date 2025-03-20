@@ -228,8 +228,8 @@ OllamaRAG is an advanced platform that leverages local Language Models (LLMs) th
 - 📚 **RAG Integration**: Enhance responses with relevant document context
 - 🎯 **Contextual Retrieval**: Smart document chunk retrieval for better context
 - 📊 **BM25 Search**: Advanced search algorithm for improved document matching
-- 🔍 **Deep Research**: Comprehensive web research with multiple search providers
-- 🌐 **Multiple Search Engines**: Support for DuckDuckGo, Google, and Brave Search
+- 🔍 **Deep Research**: Comprehensive web research capabilities
+- 🌐 **DuckDuckGo Search**: Privacy-focused web search integration
 - 🔄 **Flexible Configuration**: Customize model and RAG parameters
 """)
 
