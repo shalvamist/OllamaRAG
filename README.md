@@ -32,13 +32,16 @@ OllamaRAG brings the power of Retrieval-Augmented Generation (RAG) to your local
 - 💾 **Persistent Memory**: Save and manage conversation history across sessions
 - 📊 **Smart Document Processing**: Intelligent chunking and embedding of your documents
 - 🎯 **Context-Aware Responses**: LLM outputs enhanced with relevant document snippets
+- 🔍 **Deep Research Engine**: Automated, multi-source research with Wikipedia integration
+- 📝 **Structured Analysis**: AI-powered topic decomposition and synthesis
+- 🌐 **Web Intelligence**: Smart web content extraction and evaluation
 
 ### Built For Everyone
 
-- 🔬 **Researchers**: Quickly query and analyze large document collections
-- 💼 **Professionals**: Enhance productivity with document-aware AI assistance
-- 🎓 **Students**: Learn and explore topics with AI-powered document analysis
-- 🧪 **Developers**: Experiment with different RAG implementations
+- 🔬 **Researchers**: Quickly query, analyze, and synthesize information from multiple sources
+- 💼 **Professionals**: Enhance productivity with AI-powered research and document analysis
+- 🎓 **Students**: Learn and explore topics with comprehensive research capabilities
+- 🧪 **Developers**: Experiment with RAG and research automation implementations
 
 ### Built With
 
@@ -102,11 +105,24 @@ Create a `requirements.txt` file with the following dependencies:
 streamlit
 langchain
 langchain-ollama
+langchain-community
 chromadb
 pypdf
 ollama
 python-dotenv
+asyncio
+wikipedia
+beautifulsoup4
+requests
+uuid
 ```
+
+These packages provide:
+- Core functionality (streamlit, langchain, ollama)
+- Document processing (pypdf, chromadb)
+- Web scraping and research (beautifulsoup4, requests, wikipedia)
+- Asynchronous operations (asyncio)
+- Utility functions (python-dotenv, uuid)
 
 ## Running the Application
 
@@ -118,12 +134,13 @@ streamlit run Home.py
 
 ## Application Structure
 
-The application consists of four main pages:
+The application consists of five main pages:
 
 1. **Home** (`Home.py`): Landing page with system status and quick start guide
 2. **Model Settings** (`pages/1_🦙_Model_Settings.py`): Configure Ollama models and parameters
 3. **RAG Config** (`pages/2_🔗_RAG_Config.py`): Set up document processing and retrieval settings
 4. **Chat** (`pages/3_💬_Chat.py`): Interactive chat interface with RAG capabilities
+5. **Deep Research** (`pages/4_🔍_DeepResearch.py`): Comprehensive research tool for in-depth topic exploration
 
 ## Setup Guide
 
@@ -160,6 +177,26 @@ The application consists of four main pages:
    - Chat history is automatically saved
 
 ## Features in Detail
+
+### Deep Research Capabilities
+- Automated topic decomposition into logical subtopics
+- Multi-source research combining:
+  - DuckDuckGo web search
+  - Wikipedia articles
+  - Web page content extraction
+- Intelligent content evaluation and filtering
+- Structured research output with:
+  - Main topic overview
+  - Subtopic analysis
+  - Source citations
+  - Key findings synthesis
+- Configurable research parameters:
+  - Number of subtopics (1-20)
+  - Maximum research iterations
+  - Search attempts per subtopic
+- Markdown-formatted research reports
+- Automatic source tracking and citation
+- Progress tracking and status updates
 
 ### Chat History
 - Conversations are automatically saved in SQLite database
