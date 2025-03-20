@@ -779,8 +779,8 @@ async def conduct_research(topic):
                 "summaries": json.dumps(all_summaries)  # Pass complete summary objects
             }))["text"]
                 
-                # Write final overview
-                overview_file = os.path.join(research_dir, "research_overview.md")
+            # Write final overview
+            overview_file = os.path.join(research_dir, "research_overview.md")
             write_markdown_file(overview_file, final_result)
                 
                 # Update session state with results
