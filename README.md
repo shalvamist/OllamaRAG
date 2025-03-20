@@ -97,33 +97,6 @@ source venv/bin/activate
 ```bash
 pip install -r requirements.txt
 ```
-
-## Required Python Packages
-
-Create a `requirements.txt` file with the following dependencies:
-```
-streamlit
-langchain
-langchain-ollama
-langchain-community
-chromadb
-pypdf
-ollama
-python-dotenv
-asyncio
-wikipedia
-beautifulsoup4
-requests
-uuid
-```
-
-These packages provide:
-- Core functionality (streamlit, langchain, ollama)
-- Document processing (pypdf, chromadb)
-- Web scraping and research (beautifulsoup4, requests, wikipedia)
-- Asynchronous operations (asyncio)
-- Utility functions (python-dotenv, uuid)
-
 ## Running the Application
 
 1. Make sure Ollama is running on your system

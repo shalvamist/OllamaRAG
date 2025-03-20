@@ -65,6 +65,19 @@ if 'bot1_stance' not in st.session_state:
     st.session_state.bot1_stance = ""
 if 'bot2_stance' not in st.session_state:
     st.session_state.bot2_stance = ""
+if 'bot1_model' not in st.session_state:
+    st.session_state.bot1_model = ""
+if 'bot2_model' not in st.session_state:
+    st.session_state.bot2_model = ""
+if 'judge_model' not in st.session_state:
+    st.session_state.judge_model = ""
+# Initialize model parameters
+if 'contextWindow' not in st.session_state:
+    st.session_state.contextWindow = 4096
+if 'temperature' not in st.session_state:
+    st.session_state.temperature = 0.7
+if 'newMaxTokens' not in st.session_state:
+    st.session_state.newMaxTokens = 2048
 
 # Title and description
 st.title("🗣️ AI Debate Arena")
@@ -83,14 +96,80 @@ Choose your debate topic and configure each bot's stance to begin!
 with st.sidebar:
     st.header("⚙️ Debate Configuration")
     
-    # Model Status Section
-    st.subheader("🤖 Model Status")
-    if hasattr(st.session_state, 'ollama_model') and st.session_state.ollama_model:
-        st.success("Model Connected")
-        st.info(f"**Model:** {st.session_state.ollama_model}")
-    else:
-        st.error("No Model Selected")
-        st.warning("Please select a model in the RAG Configuration page")
+    # Model Configuration Section in an expander
+    with st.expander("🤖 Model Configuration", expanded=False):
+        # Get available models
+        try:
+            import requests
+            response = requests.get("http://localhost:11434/api/tags")
+            if response.status_code == 200:
+                available_models = [model["name"] for model in response.json()["models"]]
+            else:
+                available_models = ["No models found"]
+        except Exception as e:
+            available_models = ["Error fetching models"]
+            st.error(f"Error fetching models: {str(e)}")
+        
+        # Bot 1 Model Selection
+        st.markdown("### Bot 1 Model")
+        st.session_state.bot1_model = st.selectbox(
+            "Select Model for Bot 1",
+            options=available_models,
+            index=available_models.index(st.session_state.bot1_model) if st.session_state.bot1_model in available_models else 0,
+            key="bot1_model_select"
+        )
+        
+        # Bot 2 Model Selection
+        st.markdown("### Bot 2 Model")
+        st.session_state.bot2_model = st.selectbox(
+            "Select Model for Bot 2",
+            options=available_models,
+            index=available_models.index(st.session_state.bot2_model) if st.session_state.bot2_model in available_models else 0,
+            key="bot2_model_select"
+        )
+
+        # Judge Model Selection
+        st.markdown("### 👨‍⚖️ Judge Model")
+        st.session_state.judge_model = st.selectbox(
+            "Select Model for Debate Judge",
+            options=available_models,
+            index=available_models.index(st.session_state.judge_model) if st.session_state.judge_model in available_models else 0,
+            key="judge_model_select",
+            help="This model will analyze the debate and determine the winner"
+        )
+        
+        if not st.session_state.bot1_model or not st.session_state.bot2_model or not st.session_state.judge_model:
+            st.error("Please select models for both bots and the judge")
+        
+        st.divider()
+        
+        # Model Parameters Configuration
+        st.subheader("⚙️ Model Parameters")
+        
+        st.session_state.contextWindow = st.slider(
+            "Context Window",
+            min_value=512,
+            max_value=8192,
+            value=st.session_state.contextWindow,
+            help="Maximum context length for the model"
+        )
+        
+        st.session_state.temperature = st.slider(
+            "Temperature",
+            min_value=0.0,
+            max_value=1.0,
+            value=st.session_state.temperature,
+            step=0.1,
+            help="Controls randomness in responses (0 = deterministic, 1 = creative)"
+        )
+        
+        st.session_state.newMaxTokens = st.slider(
+            "Max Tokens",
+            min_value=256,
+            max_value=4096,
+            value=st.session_state.newMaxTokens,
+            help="Maximum number of tokens to generate"
+        )
     
     st.divider()
     
@@ -263,13 +342,14 @@ async def search_web(query: str) -> str:
         st.error(f"Error during web search: {str(e)}")
         return ""
 
-async def generate_bot_response(topic: str, stance: str, history: list, max_length: int) -> str:
+async def generate_bot_response(topic: str, stance: str, history: list, max_length: int, bot_number: int) -> str:
     """Generate a bot's response based on the topic, stance, and debate history."""
     try:
-        # Initialize LLM
+        # Initialize LLM with the bot-specific model
+        model_name = st.session_state.bot1_model if bot_number == 1 else st.session_state.bot2_model
         llm = OllamaLLM(
-            model=st.session_state.ollama_model,
-            temperature=0.7,
+            model=model_name,
+            temperature=st.session_state.temperature,
             num_ctx=st.session_state.contextWindow,
             num_predict=st.session_state.newMaxTokens
         )
@@ -307,8 +387,8 @@ async def generate_conclusion(topic: str, debate_history: list) -> str:
     try:
         # Initialize LLM with lower temperature for more objective analysis
         llm = OllamaLLM(
-            model=st.session_state.ollama_model,
-            temperature=0.2,
+            model=st.session_state.judge_model,  # Use the judge model
+            temperature=0.2,  # Lower temperature for more objective analysis
             num_ctx=st.session_state.contextWindow,
             num_predict=st.session_state.newMaxTokens
         )
@@ -345,17 +425,19 @@ async def conduct_debate(topic: str):
             bot_number = (turn % 2) + 1
             stance = st.session_state.bot1_stance if bot_number == 1 else st.session_state.bot2_stance
             
-            status.text(f"Bot {bot_number} is thinking...")
+            status.text(f"Bot {bot_number} ({st.session_state.bot1_model if bot_number == 1 else st.session_state.bot2_model}) is thinking...")
             response = await generate_bot_response(
                 topic,
                 stance,
                 st.session_state.debate_messages,
-                response_length
+                response_length,
+                bot_number
             )
             
             # Add response to debate history
             st.session_state.debate_messages.append({
                 "bot": bot_number,
+                "model": st.session_state.bot1_model if bot_number == 1 else st.session_state.bot2_model,
                 "content": response
             })
             
@@ -391,18 +473,19 @@ def display_latest_response(msg):
     """Display only the latest debate message."""
     bot_num = msg["bot"]
     content = msg["content"]
+    model = msg["model"]
     
     # Apply different styling for each bot
     if bot_num == 1:
         st.markdown(f"""
         <div class="bot-message bot1-message">
-            <strong>Bot 1 (Pro):</strong><br>{content}
+            <strong>Bot 1 (Pro) - {model}:</strong><br>{content}
         </div>
         """, unsafe_allow_html=True)
     else:
         st.markdown(f"""
         <div class="bot-message bot2-message">
-            <strong>Bot 2 (Con):</strong><br>{content}
+            <strong>Bot 2 (Con) - {model}:</strong><br>{content}
         </div>
         """, unsafe_allow_html=True)
 
@@ -421,15 +504,10 @@ debate_topic = st.text_input(
 if st.button("Start Debate", disabled=st.session_state.debate_in_progress):
     if not debate_topic:
         st.warning("Please enter a debate topic.")
-    elif not hasattr(st.session_state, 'ollama_model') or not st.session_state.ollama_model:
-        st.error("Please select an Ollama model in the RAG Configuration page first.")
+    elif not st.session_state.bot1_model or not st.session_state.bot2_model or not st.session_state.judge_model:
+        st.error("Please select models for both bots and the judge in the sidebar.")
     else:
         st.session_state.debate_in_progress = True
         st.session_state.debate_messages = []
         st.session_state.current_turn = 0
         asyncio.run(conduct_debate(debate_topic))
-
-# Display existing debate history if not in progress
-if st.session_state.debate_messages and not st.session_state.debate_in_progress:
-    st.header("Previous Debate Results")
-    display_complete_debate() 
