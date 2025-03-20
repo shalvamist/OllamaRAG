@@ -508,6 +508,7 @@ async def research_subtopic(subtopic, search_tool, synthesis_chain, main_topic, 
             for result in detailed_results:
                 # Evaluate combined results
                 try:
+                    status_text.text(f"Evaluating search results for {result['url']}")
                     evaluation_result = (await evaluation_chain.ainvoke({
                         "topic": subtopic,
                         "results": result['content']
@@ -519,7 +520,7 @@ async def research_subtopic(subtopic, search_tool, synthesis_chain, main_topic, 
                     if evaluation_result["sufficient_data"]:
                         status_text.text(f"Found sufficient data in {result['url']} - adding to combined results")
                         combined_results.append(result)
-                        # all_content += result['content'] + "\n\n"
+                        # Synthesize findings using combined results
                         summaries_subtopic += subtopic + "\n\n\n " + (await synthesis_chain.ainvoke({
                             "topic": subtopic,
                             "results": result['content']
@@ -528,7 +529,8 @@ async def research_subtopic(subtopic, search_tool, synthesis_chain, main_topic, 
                 except Exception as e:
                     st.error(f"Error evaluating search results: {str(e)}")
                     break
-
+                
+        status_text.text(f"Synthesizing findings for {subtopic}")
         # Synthesize findings using combined results
         synthesis_result = (await synthesis_chain.ainvoke({
             "topic": subtopic,
@@ -625,7 +627,7 @@ async def conduct_research(topic):
             if not isinstance(subtopics, list) or len(subtopics) == 0:
                 raise ValueError("No valid subtopics generated.")
             
-            debug_container.text(f"Generated {len(subtopics)} subtopics")
+            status_text.text(f"Generated {len(subtopics)} subtopics")
             
         except Exception as e:
             st.error(f"Error generating subtopics: {str(e)}")
