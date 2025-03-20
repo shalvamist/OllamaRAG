@@ -3,6 +3,7 @@ langchain
 langchain-ollama
 langchain-text-splitters
 langchain-community
+duckduckgo-search
 ollama
 asyncio
 uuid

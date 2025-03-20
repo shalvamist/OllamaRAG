@@ -783,7 +783,7 @@ async def conduct_research(topic):
             overview_file = os.path.join(research_dir, "research_overview.md")
             write_markdown_file(overview_file, final_result)
                 
-                # Update session state with results
+            # Update session state with results
             st.session_state.research_summary = final_result
             st.session_state.sources = list(dict.fromkeys(all_sources)) 
                 
