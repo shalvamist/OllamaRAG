@@ -87,13 +87,12 @@ st.markdown("""
     
     /* Main content width and layout */
     .block-container {
-        max-width: 60% !important;
-        padding-left: 1rem;
-        padding-right: 1rem;
+        max-width: 80% !important;
+        padding: 2rem;
         background-color: #fff;
-        border-radius: 6px;
+        border-radius: 10px;
         box-shadow: 0 8px 24px rgba(0,0,0,0.15);
-        margin: 0.5rem;
+        margin: 1rem auto;
     }
     
     /* Headers */
@@ -219,23 +218,25 @@ st.title("🦙🦜🔗 OllamaRAG 🔗🦜🦙")
 st.markdown("""
 ## Welcome to OllamaRAG! 👋
 
-OllamaRAG is a powerful tool that combines the capabilities of Ollama's local LLMs with RAG (Retrieval-Augmented Generation) for enhanced conversational AI.
+OllamaRAG is a powerful tool that combines the capabilities of Ollama's local LLMs with RAG (Retrieval-Augmented Generation) for enhanced conversational AI and deep research capabilities.
 
 ### What is OllamaRAG?
-OllamaRAG is an advanced chat interface that leverages local Language Models (LLMs) through Ollama and enhances them with RAG capabilities. This combination allows for more accurate and contextually relevant responses based on your documents.
+OllamaRAG is an advanced platform that leverages local Language Models (LLMs) through Ollama and enhances them with RAG capabilities and comprehensive research tools. This combination allows for more accurate and contextually relevant responses based on your documents and web research.
 
 ### Key Features:
 - 🤖 **Local LLM Support**: Run AI models locally on your machine
 - 📚 **RAG Integration**: Enhance responses with relevant document context
 - 🎯 **Contextual Retrieval**: Smart document chunk retrieval for better context
 - 📊 **BM25 Search**: Advanced search algorithm for improved document matching
+- 🔍 **Deep Research**: Comprehensive web research capabilities
+- 🌐 **DuckDuckGo Search**: Privacy-focused web search integration
 - 🔄 **Flexible Configuration**: Customize model and RAG parameters
 """)
 
 # Quick Start Guide
 st.header("🚀 Quick Start Guide")
 
-col1, col2, col3 = st.columns(3)
+col1, col2, col3, col4 = st.columns(4)
 
 with col1:
     st.markdown("""
@@ -253,22 +254,65 @@ with col2:
     ### 2️⃣ RAG Configuration
     
     Visit **🔗 RAG Config** to:
-    - Choose embedding model
     - Upload your documents
     - Configure chunk settings
-    - Enable advanced features
+    - Set up embeddings
+    - Initialize the database
     """)
 
 with col3:
     st.markdown("""
-    ### 3️⃣ Start Chatting
+    ### 3️⃣ Deep Research
     
-    Head to **💬 Chat** to:
-    - Interact with the model
-    - Ask questions about your documents
-    - View retrieved context
-    - Get AI-powered responses
+    Use **🔍 Deep Research** to:
+    - Perform web research
+    - Choose search providers
+    - Configure API keys
+    - Get comprehensive reports
     """)
+
+with col4:
+    st.markdown("""
+    ### 4️⃣ Chat Interface
+    
+    Access **💬 Chat** to:
+    - Interact with the model
+    - Use RAG capabilities
+    - Reference documents
+    - Get informed responses
+    """)
+
+st.divider()
+
+# Feature Highlights
+st.header("✨ Feature Highlights")
+
+# Deep Research Section
+st.subheader("🔍 Advanced Deep Research")
+st.markdown("""
+Our Deep Research feature provides comprehensive web research capabilities:
+
+- **Multiple Search Providers**:
+  - 🦆 DuckDuckGo: No API key required
+  - 🔍 Google: Custom Search API integration
+  - 🦁 Brave Search: Advanced search capabilities
+  
+- **Research Process**:
+  1. Intelligent query generation
+  2. Multi-source information gathering
+  3. Comprehensive synthesis
+  4. Automatic source citation
+  5. Iterative gap analysis
+
+- **Research Output**:
+  - Structured research summaries
+  - Key findings and analysis
+  - Verified source citations
+  - Knowledge gap identification
+""")
+
+# RAG Capabilities Section
+st.subheader("🔗 Enhanced RAG Capabilities")
 
 # System Status
 st.header("📊 System Status")

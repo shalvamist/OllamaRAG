@@ -96,7 +96,7 @@ def updateDB():
         all_splits = []
         aiSplits = []
         
-        for doc in new_docs:
+        for idx, doc in enumerate(new_docs):
             progress_text.text(f"Processing: {doc}")
             
             # Process document
@@ -117,8 +117,8 @@ def updateDB():
             else:
                 progress_text.text(f"No content extracted from {doc}")
 
-            # Update progress bar
-            progress_bar.progress(len(all_splits) / (len(new_docs) * int(st.session_state.chunk_size)))
+            # Update progress bar based on number of documents processed
+            progress_bar.progress((idx + 1) / len(new_docs))
 
         if not all_splits:
             progress_text.empty()
@@ -227,13 +227,12 @@ st.markdown("""
     
     /* Main content width and layout */
     .block-container {
-        max-width: 60% !important;
-        padding-left: 1rem;
-        padding-right: 1rem;
+        max-width: 80% !important;
+        padding: 2rem;
         background-color: #fff;
-        border-radius: 6px;
+        border-radius: 10px;
         box-shadow: 0 8px 24px rgba(0,0,0,0.15);
-        margin: 0.5rem;
+        margin: 1rem auto;
     }
     
     /* Headers */

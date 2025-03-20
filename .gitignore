@@ -1,6 +1,9 @@
 # Source documents directory
 source_documents/
 
+# Research results directory
+research_results/
+
 # Database directory
 chroma_db/
 

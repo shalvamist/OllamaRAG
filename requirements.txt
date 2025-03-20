@@ -9,3 +9,8 @@ uuid
 chromadb
 pypdf
 bm25s
+beautifulsoup4
+aiohttp
+requests
+urllib3
+wikipedia

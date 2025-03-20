@@ -13,9 +13,9 @@ def format_chat_history(messages):
 def generate_response(
     prompt_input: str, collection=None, db_ready: bool = False, system_prompt: str = "",
     llm=None, BM25retriver=None, db_retrieval_amount: int = 3
-) -> str:
+):
     """
-    Generate a response to a user's prompt using a combination of a language model and context from a database.
+    Generate a streaming response to a user's prompt using a combination of a language model and context from a database.
 
     Args:
         prompt_input: The user's input prompt.
@@ -26,11 +26,12 @@ def generate_response(
         BM25retriver: An optional BM25 retriever to use for retrieving context.
         db_retrieval_amount: The number of documents to retrieve from the database.
 
-    Returns:
-        The generated response.
+    Yields:
+        Chunks of the generated response as they become available.
     """
     if llm is None:
-        return ""
+        yield ""
+        return
 
     # Get chat history from session state
     chat_history = st.session_state.messages[:-1]  # Exclude current query
@@ -94,7 +95,6 @@ def generate_response(
         query=prompt_input
     )
     
-    # Generate response
-    response = llm.invoke(formatted_prompt)
-    
-    return response 
+    # Generate streaming response
+    for chunk in llm.stream(formatted_prompt):
+        yield chunk 
