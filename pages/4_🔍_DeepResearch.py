@@ -77,14 +77,24 @@ if 'num_subtopics' not in st.session_state:
     st.session_state.num_subtopics = 3
 
 # Title and description
-st.title("🔍 Deep Research")
+st.title("🧠 Your AI Research Assistant with ADHD ")
 st.markdown("""
-This tool performs comprehensive web research on any topic you provide. It will:
-1. Generate targeted search queries
-2. Gather information from multiple sources
-3. Synthesize findings into a coherent summary
-4. Identify knowledge gaps and perform follow-up research
-5. Provide a final report with citations
+Ever wished you could clone yourself to research multiple topics at once? Well, this is *almost* as good! 
+
+This turbocharged research buddy will:
+1. 🎯 Break down your topic into bite-sized subtopics (because who doesn't love a good outline?)
+2. 🌐 Hunt for information across multiple sources:
+   - 🦆 DuckDuckGo (for when you need the whole web)
+   - 📰 News Search (for the fresh hot takes)
+   - 📚 Wikipedia (for those "actually..." moments)
+3. 🤖 Read and analyze EVERYTHING (so you don't have to)
+4. 🧪 Filter out the fluff (no more cat videos... unless you're researching cats)
+5. ✍️ Write a comprehensive report that would make your professor proud
+6. 📝 Cite all sources (because we're not savages)
+
+Just pick your research sources, set the number of subtopics, and watch as your AI assistant goes down multiple research rabbit holes simultaneously! 🕳️🐇
+
+*Note: No AI assistants were harmed in the making of this research tool, though some did get slightly overwhelmed with excitement!* 
 """)
 
 # Sidebar configuration
@@ -120,9 +130,14 @@ with st.sidebar:
     if not output_folder:
         st.error("⚠️ Output folder path is required to proceed with research")
     
-    # Search Provider Selection
-    search_provider = "DuckDuckGo"  # Default and only option
-    st.info("Using DuckDuckGo as the search provider")
+    # Search Provider Configuration
+    st.subheader("Search Providers")
+    use_duckduckgo = st.checkbox("DuckDuckGo Web Search", value=True)
+    use_duckduckgo_news = st.checkbox("DuckDuckGo News Search", value=True)
+    use_wikipedia = st.checkbox("Wikipedia", value=True)
+    
+    if not any([use_duckduckgo, use_duckduckgo_news, use_wikipedia]):
+        st.warning("⚠️ Please enable at least one search provider")
     
     st.session_state.max_iterations = st.slider(
         "Maximum Research Iterations",
@@ -242,31 +257,50 @@ TOPIC: {topic}
 SUBTOPIC_SUMMARIES: {summaries}
 
 INSTRUCTIONS:
-1. Synthesize all subtopic findings into a cohesive overview
-2. Identify common themes and patterns
-3. Note significant discoveries
-4. Address gaps and limitations
-5. Draw meaningful conclusions
-6. Reference subtopics when discussing findings
-
-IMPORTANT: You MUST include ALL THREE required fields in your response:
-1. "overview" - A detailed markdown-formatted overview of all findings
-2. "key_findings" - An array of major findings with their sources
-3. "conclusions" - A final summary of implications and recommendations
-
-YOUR RESPONSE MUST BE in the following format:
-"## Research Overview\\n\\nComprehensive overview text here...\\n\\n
-### Key Themes\\n* Theme 1 (from Subtopic X)\\n* Theme 2 (from Subtopics Y and Z)\\n\\n
-### Significant Findings\\nDetailed findings here with subtopic references...",
-###"Conclusions": "Final conclusions and implications of the research, referencing key subtopics..."
-
-REQUIREMENTS:
-1. ALL THREE FIELDS MUST BE PRESENT AND NON-EMPTY
-2. The overview field should use markdown formatting
+1. Create a well-structured research report that includes:
+   - Executive summary of the entire research
+   - Key findings and insights across all subtopics
+   - Detailed subtopic summaries
+   - Final conclusions and recommendations
+2. Use clear markdown formatting for readability
 3. Reference specific subtopics when discussing findings
 4. Maintain clear connection between findings and their sources
-5. The key_findings array must contain at least 3 findings
-6. Each finding should reference its source subtopic(s)
+5. Include practical implications and next steps
+
+YOUR RESPONSE MUST follow this exact structure:
+```markdown
+# Research Report: [Topic]
+
+## Executive Summary
+[Provide a concise overview of the entire research, major themes, and key conclusions]
+
+## Key Research Findings
+[List 3-5 major findings that emerged across multiple subtopics]
+
+## Detailed Subtopic Analysis
+[For each subtopic, include:
+- Summary of findings
+- Key insights
+- Notable data points
+- Relevant sources]
+
+## Research Implications
+[Discuss the practical implications of the findings]
+
+## Recommendations
+[Provide actionable recommendations based on the research]
+
+## Next Steps
+[Suggest potential areas for further research or investigation]
+```
+
+REQUIREMENTS:
+1. Use proper markdown formatting
+2. Include ALL sections as shown above
+3. Reference specific subtopics when discussing findings
+4. Maintain clear connection between findings and their sources
+5. Be concise but comprehensive
+6. Focus on synthesis rather than repetition
 
 RESPONSE:"""
 
@@ -440,7 +474,7 @@ def clean_json_string(json_str: str) -> str:
         
         return json_str.strip()
 
-async def research_subtopic(subtopic, search_tool, wikipedia_retriever, synthesis_chain, main_topic, status_text):
+async def research_subtopic(subtopic, search_tools, synthesis_chain, main_topic, status_text):
     """Conduct research on a specific subtopic."""
     try:
         # Initialize LLM chains
@@ -489,37 +523,55 @@ async def research_subtopic(subtopic, search_tool, wikipedia_retriever, synthesi
             # Debug search query
             status_text.text(f"Search attempt {search_attempt}/{max_search_attempts} for: {search_query}")
             
-            # Perform web search with contextual query
-            search_results = search_tool.run(search_query)
-            
-            # Get Wikipedia results
-            status_text.text("Retrieving Wikipedia results...")
-            wikipedia_results = wikipedia_retriever.get_relevant_documents(search_query)
-            
-            # Extract URLs from search results
-            urls = re.findall(r'https?://[^\s<>"]+|www\.[^\s<>"]+', search_results)
-            status_text.text(f"Found URLs: {urls}")
-            
-            # Fetch and process content from each URL
             detailed_results = []
             
-            # Process Wikipedia results first
-            for wiki_doc in wikipedia_results:
-                detailed_results.append({
-                    "url": f"Wikipedia: {wiki_doc.metadata.get('title', 'Unknown Article')}",
-                    "content": wiki_doc.page_content,
-                    "source": "wikipedia"
-                })
+            # Perform web searches based on enabled providers
+            if search_tools.get('web'):
+                status_text.text("Performing DuckDuckGo web search...")
+                search_results = search_tools['web'].run(search_query)
+                urls = re.findall(r'https?://[^\s<>"]+|www\.[^\s<>"]+', search_results)
+                status_text.text(f"Found URLs from web search: {urls}")
+                
+                # Process web URLs
+                for url in urls:
+                    status_text.text(f"Processing URL: {url}")
+                    content = await fetch_and_process_url(url, status_text)
+                    if content:
+                        detailed_results.append({
+                            "url": url,
+                            "content": content,
+                            "source": "web"
+                        })
             
-            # Process web URLs
-            for url in urls:
-                status_text.text(f"Processing URL: {url}")
-                content = await fetch_and_process_url(url, status_text)
-                if content:
+            # Perform news search if enabled
+            if search_tools.get('news'):
+                status_text.text("Performing DuckDuckGo news search...")
+                news_results = search_tools['news'].run(search_query)
+                news_urls = re.findall(r'https?://[^\s<>"]+|www\.[^\s<>"]+', news_results)
+                status_text.text(f"Found URLs from news search: {news_urls}")
+                
+                # Process news URLs
+                for url in news_urls:
+                    status_text.text(f"Processing news URL: {url}")
+                    content = await fetch_and_process_url(url, status_text)
+                    if content:
+                        detailed_results.append({
+                            "url": url,
+                            "content": content,
+                            "source": "news"
+                        })
+            
+            # Get Wikipedia results if enabled
+            if search_tools.get('wikipedia'):
+                status_text.text("Retrieving Wikipedia results...")
+                wikipedia_results = search_tools['wikipedia'].get_relevant_documents(search_query)
+                
+                # Process Wikipedia results
+                for wiki_doc in wikipedia_results:
                     detailed_results.append({
-                        "url": url,
-                        "content": content,
-                        "source": "web"
+                        "url": f"Wikipedia: {wiki_doc.metadata.get('title', 'Unknown Article')}",
+                        "content": wiki_doc.page_content,
+                        "source": "wikipedia"
                     })
             
             # Combine search results with detailed content
@@ -529,7 +581,8 @@ async def research_subtopic(subtopic, search_tool, wikipedia_retriever, synthesi
             for result in detailed_results:
                 # Evaluate combined results
                 try:
-                    status_text.text(f"Evaluating {'Wikipedia' if result['source'] == 'wikipedia' else 'web'} content from {result['url']}")
+                    source_type = result['source'].capitalize()
+                    status_text.text(f"Evaluating {source_type} content from {result['url']}")
                     evaluation_result = (await evaluation_chain.ainvoke({
                         "topic": subtopic,
                         "results": result['content']
@@ -542,7 +595,7 @@ async def research_subtopic(subtopic, search_tool, wikipedia_retriever, synthesi
                         status_text.text(f"Found sufficient data in {result['url']} - adding to combined results")
                         combined_results.append(result)
                         # Add to summaries with source indication
-                        source_prefix = "[Wikipedia] " if result['source'] == 'wikipedia' else "[Web] "
+                        source_prefix = f"[{source_type}] "
                         summaries_subtopic += f"{source_prefix}{subtopic}\n\n\n{result['content']}\n\n"
 
                 except Exception as e:
@@ -581,10 +634,19 @@ async def conduct_research(topic):
         subtopic_status = st.empty()
         debug_container = st.empty()
         
-        # Initialize the search tool (DuckDuckGo only)
-        search_tool = DuckDuckGoSearchResults()
-        search_news = DuckDuckGoSearchResults(backend="news")
-        wikipedia_retriever = WikipediaRetriever()
+        # Initialize search tools based on user configuration
+        search_tools = {}
+        if use_duckduckgo:
+            search_tools['web'] = DuckDuckGoSearchResults()
+        if use_duckduckgo_news:
+            search_tools['news'] = DuckDuckGoSearchResults(backend="news")
+        if use_wikipedia:
+            search_tools['wikipedia'] = WikipediaRetriever()
+            
+        if not search_tools:
+            st.error("Please enable at least one search provider to proceed")
+            return
+
         # Initialize the LLM and chains
         llm = OllamaLLM(
             model=st.session_state.ollama_model,
@@ -677,7 +739,7 @@ async def conduct_research(topic):
             status_text.text(f"Researching subtopic {idx}/{len(subtopics)}: {subtopic}")
             
             # Research the subtopic with main topic context
-            result, webpage_contents = await research_subtopic(subtopic, search_tool, wikipedia_retriever, synthesis_chain, topic, subtopic_status)
+            result, webpage_contents = await research_subtopic(subtopic, search_tools, synthesis_chain, topic, subtopic_status)
 
             if result:
                 # Create subtopic file
@@ -718,14 +780,11 @@ async def conduct_research(topic):
             }))["text"]
 
             # Write final overview
-            overview_file = os.path.join(research_dir, "research_overview.md")
-            overview_content = f"# Research Overview: {topic}\n\n"
-            overview_content += final_result + "\n\n"
-            
-            write_markdown_file(overview_file, overview_content)
+            overview_file = os.path.join(research_dir, "research_overview.md")            
+            write_markdown_file(overview_file, final_result)
             
             # Update session state with results
-            st.session_state.research_summary = overview_content
+            st.session_state.research_summary = final_result
             st.session_state.sources = list(dict.fromkeys(all_sources)) 
                 
                 
