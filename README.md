@@ -1,27 +1,33 @@
 <!-- Improved compatibility of back to top link: See: https://github.com/othneildrew/Best-README-Template/pull/73 -->
 <a id="readme-top"></a>
 
-<!-- PROJECT LOGO -->
-<br />
+# 🦙🦜🔗 OllamaRAG
+
 <div align="center">
-  <a href="https://github.com/shalvamist/OllamaRAG/">
-  </a>
-  <h1 align="center">🦙🦜🔗 OllamaRAG 🔗🦜🦙</h1>
-  <p align="center">
-    <strong>Supercharge your local LLMs with powerful RAG capabilities! 🚀</strong>
-    <br />
-    A modern, user-friendly interface for document-enhanced conversations
-    <br />
-    <a href="#features"><strong>Explore Features »</strong></a>
-    &nbsp;·&nbsp;
-    <a href="#installation"><strong>Quick Start »</strong></a>
-    &nbsp;·&nbsp;
-    <a href="#setup-guide"><strong>Setup Guide »</strong></a>
-  </p>
+
+[![Made for Local LLMs](https://img.shields.io/badge/Made%20for-Local%20LLMs-blue?style=for-the-badge&logo=robot&logoColor=white)](https://ollama.ai)
+[![Built with Streamlit](https://img.shields.io/badge/Built%20with-Streamlit-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)](https://streamlit.io)
+
+**Your Personal AI Research & Debate Assistant**  
+_Local. Private. Powerful._
+
+---
+
+🔍 **Research** anything with AI-powered analysis  
+🤖 **Debate** topics with multiple AI personalities  
+📚 **Learn** from AI-enhanced document interactions  
+🔒 **Privacy** guaranteed with 100% local processing
+
+---
+
+[🚀 Quick Start](#-quick-start) •
+[✨ Features](#-key-features) •
+[🛠️ Setup Guide](#-quick-start) •
+[📘 Documentation](https://github.com/yourusername/OllamaRAG/wiki)
+
 </div>
 
-<!-- ABOUT THE PROJECT -->
-## 🌟 About The Project
+> Supercharge your local LLMs with powerful RAG capabilities! Transform your research, spark engaging AI debates, and unlock the full potential of your documents - all while keeping your data private.
 
 OllamaRAG is your all-in-one solution for document-enhanced AI conversations, research automation, and interactive AI debates - all running locally on your machine!
 
