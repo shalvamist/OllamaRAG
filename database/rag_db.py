@@ -3,7 +3,6 @@ import chromadb
 import chromadb.utils.embedding_functions as embedding_functions
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
-import asyncio
 import ollama
 
 # Constants
@@ -86,7 +85,7 @@ def get_bm25_retriever(documents):
     from langchain.retrievers import BM25Retriever
     return BM25Retriever.from_documents(documents)
 
-async def load_documents(chunk_size, overlap, docs, context_llm=None):
+def load_documents(chunk_size, overlap, docs, context_llm=None):
     """
     Load and process documents for RAG.
     
