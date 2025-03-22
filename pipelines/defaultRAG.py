@@ -1,6 +1,7 @@
 import streamlit as st
 from langchain.prompts import PromptTemplate
-from database.rag_db import query_chromadb, query_bm25
+from langchain.chains import LLMChain
+from CommonUtils.rag_utils import query_chromadb, query_bm25
 
 def format_chat_history(messages):
     """Format chat history into a single string for context."""

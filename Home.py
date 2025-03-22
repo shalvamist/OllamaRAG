@@ -1,6 +1,6 @@
 import streamlit as st
 import os
-from database.rag_db import SOURCE_PATH, DB_PATH, get_client
+from CommonUtils.rag_utils import SOURCE_PATH, DB_PATH, get_client
 
 def initApp():
     # Create the directories if they do not exist    

@@ -2,7 +2,7 @@ import streamlit as st
 import time
 from datetime import datetime
 from pipelines.defaultRAG import generate_response
-from database.chat_db import (
+from CommonUtils.chat_db import ( 
     create_conversation,
     add_message,
     get_conversation_history,
