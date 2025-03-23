@@ -1,7 +1,14 @@
 import streamlit as st
 import time
 from datetime import datetime
+import re
+import os
 from pipelines.defaultRAG import generate_response
+from CommonUtils.rag_utils import ( 
+    SOURCE_PATH,
+    get_collection,
+    get_client
+)
 from CommonUtils.chat_db import ( 
     create_conversation,
     add_message,
@@ -55,6 +62,25 @@ if 'ContextualRAG' not in st.session_state:
 if 'show_save_dialog' not in st.session_state:
     st.session_state.show_save_dialog = False
 
+# Initialize session state for available databases
+if 'available_databases' not in st.session_state:
+    st.session_state.available_databases = []
+    
+# Initialize database collections dict
+if 'database_collections' not in st.session_state:
+    st.session_state.database_collections = {}
+
+# Update available databases
+def update_available_databases():
+    """Updates the list of available databases from the source_documents directory."""
+    try:
+        if os.path.exists(SOURCE_PATH):
+            st.session_state.available_databases = [d for d in os.listdir(SOURCE_PATH) 
+                                                 if os.path.isdir(os.path.join(SOURCE_PATH, d))]
+    except Exception as e:
+        st.error(f"Error updating database list: {str(e)}")
+        st.session_state.available_databases = []
+
 # Update available models
 def update_ollama_model():
     """Updates the list of available Ollama models."""
@@ -69,8 +95,9 @@ def update_ollama_model():
         st.error(f"Error updating model list: {str(e)}")
         st.session_state.dropDown_model_list = []
 
-# Update available models on page load
+# Update available models and databases on page load
 update_ollama_model()
+update_available_databases()
 
 def stream_data(data):
     """
@@ -160,6 +187,58 @@ def parse_message_content(content):
         except Exception:
             return content
     return content
+
+# Parse user prompt for @database mentions
+def parse_database_mention(prompt):
+    """
+    Parses the prompt for @database mentions and returns the database name and cleaned prompt.
+    
+    Returns:
+        tuple: (database_name, cleaned_prompt)
+    """
+    # Regular expression to match @database_name
+    match = re.search(r'@(\w+[-]?\w*)', prompt)
+    
+    if match:
+        db_name = match.group(1)
+        # Remove the @database_name from the prompt
+        cleaned_prompt = prompt.replace(match.group(0), '').strip()
+        return db_name, cleaned_prompt
+    
+    return None, prompt
+
+# Get or initialize a database collection
+def get_db_collection(db_name, embedding_model):
+    """
+    Gets or initializes a database collection for the specified database name.
+    
+    Returns:
+        The ChromaDB collection for the database
+    """
+    if db_name in st.session_state.database_collections:
+        return st.session_state.database_collections[db_name]
+    
+    # Check if embedding model is set
+    if not st.session_state.embeddingModel:
+        return None
+        
+    # Get a ChromaDB client
+    client = get_client()
+    
+    # Initialize the collection
+    collection_name = f"rag_collection_{db_name}"
+    collection = get_collection(
+        st.session_state.embeddingModel,
+        client,
+        collection_name,
+        f"RAG collection for {db_name}"
+    )
+    
+    # Store in session state
+    if collection:
+        st.session_state.database_collections[db_name] = collection
+    
+    return collection
 
 # Set page config
 st.set_page_config(
@@ -455,12 +534,44 @@ else:
         """, unsafe_allow_html=True)
 
     # Chat input
-    if prompt := st.chat_input("What's on your mind?"):
+    if prompt := st.chat_input("Type @database to use a specific RAG database..."):
         # Add user message to UI
         st.session_state.messages.append({"role": "user", "content": prompt})
         
         with st.chat_message("user"):
             st.write(prompt)
+
+        # Parse for @database mentions
+        db_name, cleaned_prompt = parse_database_mention(prompt)
+        
+        # Use specific database if mentioned and available
+        collection_to_use = None
+        use_rag = st.session_state.db_ready
+        db_indicator = ""
+        
+        if db_name:
+            if db_name in st.session_state.available_databases:
+                # Get collection for the database
+                collection_to_use = get_db_collection(db_name, st.session_state.embeddingModel)
+                
+                # If collection could not be initialized, show warning
+                if not collection_to_use:
+                    with st.chat_message("assistant"):
+                        st.warning(f"Database '{db_name}' could not be initialized. Using default RAG instead.")
+                    collection_to_use = st.session_state.collection
+                else:
+                    use_rag = True
+                    db_indicator = f"Using database: {db_name}"
+            else:
+                # Database not found
+                with st.chat_message("assistant"):
+                    available_dbs = ", ".join([f"`@{db}`" for db in st.session_state.available_databases]) if st.session_state.available_databases else "No databases available"
+                    st.warning(f"Database '{db_name}' not found. Available databases: {available_dbs}")
+                    # Continue with default RAG
+                collection_to_use = st.session_state.collection
+        else:
+            # Use default collection
+            collection_to_use = st.session_state.collection
 
         # Generate response
         if st.session_state.messages[-1]["role"] != "assistant":
@@ -474,9 +585,9 @@ else:
                 
                 # Stream the response
                 for chunk in generate_response(
-                    st.session_state.messages[-1]["content"],
-                    st.session_state.collection,
-                    st.session_state.db_ready,
+                    cleaned_prompt,  # Use cleaned prompt without @mention
+                    collection_to_use,  # Use specific collection if mentioned
+                    use_rag,  # Enable RAG if collection available
                     st.session_state.system_prompt,
                     st.session_state.llm,
                     st.session_state.BM25retriver,
@@ -492,7 +603,10 @@ else:
                         # Get text before thinking
                         display_text = full_response.split('<think>')[0].strip()
                         if display_text:
-                            message_placeholder.markdown(display_text + " 💭")
+                            if db_indicator:
+                                message_placeholder.markdown(f"*{db_indicator}*\n\n{display_text} 💭")
+                            else:
+                                message_placeholder.markdown(display_text + " 💭")
                         continue
                     
                     if is_thinking and '</think>' not in full_response:
@@ -504,9 +618,15 @@ else:
                         )
                         
                         if display_text:
-                            message_placeholder.markdown(f"{display_text}\n\n{thinking_section}", unsafe_allow_html=True)
+                            if db_indicator:
+                                message_placeholder.markdown(f"*{db_indicator}*\n\n{display_text}\n\n{thinking_section}", unsafe_allow_html=True)
+                            else:
+                                message_placeholder.markdown(f"{display_text}\n\n{thinking_section}", unsafe_allow_html=True)
                         else:
-                            message_placeholder.markdown(thinking_section, unsafe_allow_html=True)
+                            if db_indicator:
+                                message_placeholder.markdown(f"*{db_indicator}*\n\n{thinking_section}", unsafe_allow_html=True)
+                            else:
+                                message_placeholder.markdown(thinking_section, unsafe_allow_html=True)
                         continue
                         
                     if '</think>' in full_response and is_thinking:
@@ -531,15 +651,21 @@ else:
                                 final_response = f"{thinking_section}\n\n{post_think}"
                             else:
                                 final_response = thinking_section
-                                
-                            message_placeholder.markdown(final_response, unsafe_allow_html=True)
+                            
+                            if db_indicator:
+                                message_placeholder.markdown(f"*{db_indicator}*\n\n{final_response}", unsafe_allow_html=True)
+                            else:
+                                message_placeholder.markdown(final_response, unsafe_allow_html=True)
                         continue
                     
                     # Normal response handling for non-thinking parts
                     if not is_thinking:
                         if '<think>' not in full_response:
                             final_response = full_response
-                            message_placeholder.markdown(final_response)
+                            if db_indicator:
+                                message_placeholder.markdown(f"*{db_indicator}*\n\n{final_response}")
+                            else:
+                                message_placeholder.markdown(final_response)
                 
                 # Update final response without cursor
                 if not final_response:
@@ -568,9 +694,14 @@ else:
                         else:
                             final_response = thinking_section
                 
-                message_placeholder.markdown(final_response, unsafe_allow_html=True)
-                # Store the response with the collapsible thinking section
-                st.session_state.messages.append({"role": "assistant", "content": final_response})
+                # Add database indicator to stored message
+                if db_indicator:
+                    final_message = f"*{db_indicator}*\n\n{final_response}"
+                    message_placeholder.markdown(final_message, unsafe_allow_html=True)
+                    st.session_state.messages.append({"role": "assistant", "content": final_message})
+                else:
+                    message_placeholder.markdown(final_response, unsafe_allow_html=True)
+                    st.session_state.messages.append({"role": "assistant", "content": final_response})
 
     # Sidebar content
     with st.sidebar:
@@ -629,6 +760,28 @@ else:
             else:
                 st.warning("RAG System: Not Configured")
                 st.info("Visit the RAG Configuration page to set up document retrieval")
+                
+        # Available Databases Section - Shows databases that can be used with @mentions
+        with st.expander("📚 Available Databases", expanded=True):
+            if st.session_state.available_databases:
+                st.markdown("### Using Specific Databases")
+                st.markdown("You can access specific databases by using the `@` symbol followed by the database name:")
+                st.markdown("```\n@database_name your question here\n```")
+                
+                st.markdown("### Available Databases")
+                for db in st.session_state.available_databases:
+                    st.markdown(f"- `@{db}`")
+                
+                if st.button("🔄 Refresh Databases"):
+                    update_available_databases()
+                    st.rerun()
+            else:
+                st.info("No databases available")
+                st.markdown("Create databases in the RAG Configuration page, then use them by typing `@database_name` in the chat.")
+                
+                if st.button("🔄 Check for Databases"):
+                    update_available_databases()
+                    st.rerun()
         
         # Saved Chats Section - Collapsable
         with st.expander("💾 Saved Conversations", expanded=False):

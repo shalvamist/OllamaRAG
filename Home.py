@@ -207,7 +207,7 @@ with col1:
         <p>Interact with your models in a modern chat interface:</p>
         <ul>
             <li>Chat with context from your documents</li>
-            <li>Access knowledge from your document database</li>
+            <li>Access specific databases using <code>@database_name</code> mentions</li>
             <li>Save and load conversations</li>
             <li>Clear conversation history when needed</li>
         </ul>
