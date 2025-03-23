@@ -75,14 +75,15 @@ INSTRUCTIONS:
 YOU MUST RESPOND WITH A THIS EXACT STRUCTURE:
 "summary": 
 "Write your detailed summary here using markdown formatting",
+
 "key_points":
 "First key point goes here"
-        "Second key point goes here"
+"Second key point goes here"
+...
 
 REQUIREMENTS:
 1. No markdown code blocks or formatting
 2. All fields must be present
-
 
 EXAMPLE RESPONSE:
 "summary": 
@@ -127,10 +128,10 @@ YOUR RESPONSE MUST follow this exact structure:
 # Research Report: [Topic]
 
 ## Executive Summary
-[Provide a concise overview of the entire research, major themes, and key conclusions - should be 4-5 paragraphs]
+[Provide a broad overview of the entire research, major themes, and key conclusions - should be 4-5 paragraphs & 3-4 sentences per paragraph]
 
 ## Key Research Findings
-[List 3-5 major findings that emerged across multiple subtopics - should be 4-5 paragraphs]
+[List 3-5 major findings that emerged across multiple subtopics - should be 4-5 paragraphs & 3-4 sentences per paragraph]
 
 ## Detailed Subtopic Analysis
 [For each subtopic, include:
@@ -240,6 +241,8 @@ async def fetch_and_process_url(url: str, debug_container) -> str:
         import streamlit as st
         if 'stop_requested' in st.session_state and st.session_state.stop_requested:
             debug_container.warning(f"Skipping URL processing - research stopped: {url}")
+            if 'research_in_progress' in st.session_state:
+                st.session_state.research_in_progress = False
             return ""
             
         # Validate URL
@@ -259,6 +262,8 @@ async def fetch_and_process_url(url: str, debug_container) -> str:
             # Check again if research has been stopped before potentially lengthy operation
             if 'stop_requested' in st.session_state and st.session_state.stop_requested:
                 debug_container.warning(f"Skipping content loading - research stopped: {url}")
+                if 'research_in_progress' in st.session_state:
+                    st.session_state.research_in_progress = False
                 return ""
                 
             # Use synchronous loading as aload() might not work well with bs_kwargs
@@ -267,6 +272,8 @@ async def fetch_and_process_url(url: str, debug_container) -> str:
             # Check again if research has been stopped after loading
             if 'stop_requested' in st.session_state and st.session_state.stop_requested:
                 debug_container.warning(f"Discarding loaded content - research stopped: {url}")
+                if 'research_in_progress' in st.session_state:
+                    st.session_state.research_in_progress = False
                 return ""
                 
             if not docs:
@@ -281,6 +288,8 @@ async def fetch_and_process_url(url: str, debug_container) -> str:
                 # Check again if research has been stopped before retrying load
                 if 'stop_requested' in st.session_state and st.session_state.stop_requested:
                     debug_container.warning(f"Skipping content retry - research stopped: {url}")
+                    if 'research_in_progress' in st.session_state:
+                        st.session_state.research_in_progress = False
                     return ""
                     
                 docs = loader.load()

@@ -332,6 +332,7 @@ async def research_subtopic(subtopic, search_tools, synthesis_chain, main_topic,
         # Check if stop was requested
         if st.session_state.stop_requested:
             status_text.warning("Research stopped by user.")
+            st.session_state.research_in_progress = False
             return None, None
             
         # Initialize LLM chains
@@ -375,6 +376,7 @@ async def research_subtopic(subtopic, search_tools, synthesis_chain, main_topic,
             # Check if stop was requested
             if st.session_state.stop_requested:
                 status_text.warning("Research stopped by user.")
+                st.session_state.research_in_progress = False
                 return None, None
                 
             search_attempt += 1
@@ -486,6 +488,7 @@ async def research_subtopic(subtopic, search_tools, synthesis_chain, main_topic,
                 # Check if stop was requested
                 if st.session_state.stop_requested:
                     status_text.warning("Research stopped by user.")
+                    st.session_state.research_in_progress = False
                     return None, None
                     
                 # Evaluate combined results
@@ -514,6 +517,7 @@ async def research_subtopic(subtopic, search_tools, synthesis_chain, main_topic,
         # Check if stop was requested
         if st.session_state.stop_requested:
             status_text.warning("Research stopped by user.")
+            st.session_state.research_in_progress = False
             return None, None
             
         status_text.text(f"Synthesizing findings for {subtopic}")
@@ -650,6 +654,7 @@ async def conduct_research(topic):
         # Check if stop was requested
         if st.session_state.stop_requested:
             status_text.warning("Research stopped by user.")
+            st.session_state.research_in_progress = False
             return
             
         try:
@@ -691,8 +696,9 @@ async def conduct_research(topic):
         all_sources = []  # Track all sources across subtopics
         for idx, subtopic in enumerate(subtopics[:st.session_state.num_subtopics], 1):
             # Check after each subtopic - critical for responsiveness
-            if researchUpdate(f"Researching subtopic {idx}/{len(subtopics)}: {subtopic}", 
-                         0.25 + (0.55 * ((idx-1) / len(subtopics)))):
+            if researchUpdate(f"Researching subtopic {idx}/{st.session_state.num_subtopics}: {subtopic}", 
+                         0.25 + (0.55 * ((idx-1) / st.session_state.num_subtopics))):
+                st.session_state.research_in_progress = False
                 return
             
             # Research the subtopic with main topic context
@@ -700,7 +706,8 @@ async def conduct_research(topic):
 
             # Check after each subtopic is complete
             if researchUpdate(f"Completed research on subtopic {idx}", 
-                         0.25 + (0.55 * (idx / len(subtopics)))):
+                         0.25 + (0.55 * (idx / st.session_state.num_subtopics))):
+                st.session_state.research_in_progress = False
                 return
 
             if result:
@@ -732,11 +739,13 @@ async def conduct_research(topic):
             
             # Update UI after writing files
             if researchUpdate(f"Saved research for subtopic {idx}", 
-                        0.25 + (0.55 * (idx / len(subtopics))) + 0.01):
+                        0.25 + (0.55 * (idx / st.session_state.num_subtopics)) + 0.01):
+                st.session_state.research_in_progress = False
                 return
         
         # Step 4: Create final synthesis
         if researchUpdate("Creating final research synthesis...", 0.85):
+            st.session_state.research_in_progress = False
             return
             
         try:
@@ -759,6 +768,7 @@ async def conduct_research(topic):
             return
         
         if researchUpdate("Research complete!", 1.0):
+            st.session_state.research_in_progress = False
             return
             
         debug_container.empty()
@@ -770,12 +780,6 @@ async def conduct_research(topic):
         st.error(f"Research Error: {str(e)}")
     finally:
         st.session_state.research_in_progress = False
-
-# Main research interface in a card-like container
-st.markdown("""
-<h2 style="color: #1E88E5; margin-top: 0;">Research Topic</h2>
-</div>
-""", unsafe_allow_html=True)
 
 research_topic = st.text_input(
     "Enter your research query",
@@ -815,13 +819,14 @@ with col1:
             # Check if research was stopped - provide feedback
             if st.session_state.stop_requested:
                 st.warning(f"Research on '{research_topic}' was stopped by user request.")
+                st.session_state.research_in_progress = False
             else:
                 st.success(f"Research on '{research_topic}' completed successfully!")
 
 with col2:
     stop_button = st.button(
         "⏹️ Stop", 
-        disabled=not st.session_state.research_in_progress,
+        # disabled=not st.session_state.research_in_progress,
         use_container_width=True,
         type="secondary"
     )
