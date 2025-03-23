@@ -6,11 +6,13 @@ from langchain.prompts import PromptTemplate
 from langchain_community.tools import DuckDuckGoSearchResults
 from langchain_community.document_loaders import WebBaseLoader
 from langchain_community.retrievers import WikipediaRetriever
+from langchain_community.utilities import GoogleSerperAPIWrapper
 
 import os
 import asyncio
 import json
 import re
+import shutil  # Added for directory operations
 from urllib.parse import urlparse
 from bs4 import SoupStrainer
 
@@ -20,7 +22,13 @@ from CommonUtils.research_utils import (
     create_research_directory,
     write_markdown_file,
     fetch_and_process_url,
-    clean_json_string
+    clean_json_string,
+    # Import prompt templates
+    SEARCH_QUERY_TEMPLATE,
+    SUBTOPICS_TEMPLATE,
+    SUBTOPIC_SUMMARY_TEMPLATE,
+    FINAL_SYNTHESIS_TEMPLATE,
+    SEARCH_RESULTS_EVALUATION_TEMPLATE
 )
 
 # Set page config
@@ -121,6 +129,14 @@ if 'max_search_attempts' not in st.session_state:
     st.session_state.max_search_attempts = 3
 if 'num_subtopics' not in st.session_state:
     st.session_state.num_subtopics = 3
+if 'serper_api_key' not in st.session_state:
+    st.session_state.serper_api_key = ""
+if 'stop_requested' not in st.session_state:
+    st.session_state.stop_requested = False
+if 'output_folder' not in st.session_state:
+    st.session_state.output_folder = os.path.join(os.getcwd(), "research_results")
+if 'current_research_topic' not in st.session_state:
+    st.session_state.current_research_topic = ""
 
 # Title and description
 st.markdown("""
@@ -136,7 +152,7 @@ st.markdown("""
 This advanced research assistant can help you explore any topic in depth by:
 
 - ✅ Breaking down complex topics into manageable subtopics
-- ✅ Searching multiple sources simultaneously (Web, News, Wikipedia)
+- ✅ Searching multiple sources simultaneously (Web, News, Wikipedia, Google)
 - ✅ Evaluating content quality and relevance automatically
 - ✅ Generating a comprehensive, well-structured research report
 - ✅ Citing all sources for academic integrity
@@ -176,26 +192,85 @@ with st.sidebar:
     # Research Configuration Section - Collapsable
     with st.expander("📁 Output Configuration", expanded=False):
         # Output folder configuration with better help text
-        default_output = os.path.join(os.getcwd(), "research_results")
-        output_folder = st.text_input(
+        st.session_state.output_folder = st.text_input(
             "Output Location",
-            value=default_output,
+            value=st.session_state.output_folder,
             placeholder="Enter folder path...",
             help="Specify where to save all research documents and reports"
         )
-        if not output_folder:
+        if not st.session_state.output_folder:
             st.error("⚠️ Output folder path is required")
+    
+    # Google Serper API Configuration - Collapsable
+    with st.expander("🔑 API Keys", expanded=False):
+        st.markdown("""
+        <p style="color: #1E88E5; font-weight: 600; margin-bottom: 10px;">Google Search Integration</p>
+        <p style="font-size: 0.9em; margin-bottom: 15px;">
+        To use Google Search, you need a Serper API key. Serper provides access to Google search results and is free for limited use:
+        <ol style="font-size: 0.9em;">
+            <li>Sign up at <a href="https://serper.dev" target="_blank">serper.dev</a></li>
+            <li>Create an API key in your dashboard</li>
+            <li>Copy and paste the API key below</li>
+        </ol>
+        </p>
+        """, unsafe_allow_html=True)
+        
+        st.session_state.serper_api_key = st.text_input(
+            "Google Serper API Key",
+            value=st.session_state.serper_api_key,
+            type="password",
+            help="Get your free API key from serper.dev"
+        )
+        
+        if st.session_state.serper_api_key:
+            st.success("✅ API key provided")
+        else:
+            st.info("ℹ️ Google Search will be disabled without an API key")
     
     # Search Provider Configuration - Collapsable
     with st.expander("🔎 Data Sources", expanded=False):
-        use_duckduckgo = st.checkbox("Web Search (DuckDuckGo)", value=True, 
-                                    help="Search the general web for information")
-        use_duckduckgo_news = st.checkbox("News Search", value=True,
-                                         help="Search recent news articles for timely information")
-        use_wikipedia = st.checkbox("Wikipedia", value=True,
-                                   help="Search Wikipedia for well-established information")
+        st.markdown("""
+        <p style="font-size: 0.9em; margin-bottom: 15px;">
+        Select which search engines to use for your research. Using multiple sources improves research quality.
+        </p>
+        """, unsafe_allow_html=True)
         
-        if not any([use_duckduckgo, use_duckduckgo_news, use_wikipedia]):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            use_duckduckgo = st.checkbox("DuckDuckGo Web", value=True, 
+                                        help="Search the general web for information via DuckDuckGo")
+            use_wikipedia = st.checkbox("Wikipedia", value=True,
+                                      help="Search Wikipedia for well-established information")
+        
+        with col2:
+            use_duckduckgo_news = st.checkbox("DuckDuckGo News", value=True,
+                                             help="Search recent news articles via DuckDuckGo")
+            use_google_serper = st.checkbox("Google Search", value=False,
+                                           help="Use Google Search for high-quality, current results (requires API key)")
+        
+        # Show Google Serper configuration options if enabled
+        if use_google_serper:
+            if not st.session_state.serper_api_key:
+                st.warning("⚠️ Google Serper API key is required to use Google Search. Add your key in the API Keys section.")
+            
+            st.markdown("#### Google Search Options")
+            google_serper_type = st.radio(
+                "Search Type",
+                options=["search", "news", "images"],
+                horizontal=True,
+                help="Select the type of Google search to perform"
+            )
+            
+            # Explain the different search types
+            if google_serper_type == "search":
+                st.info("Standard Google search results, including web pages and knowledge graph")
+            elif google_serper_type == "news":
+                st.info("Recent news articles from Google News")
+            elif google_serper_type == "images":
+                st.info("Image search results with source webpage information")
+        
+        if not any([use_duckduckgo, use_duckduckgo_news, use_wikipedia, use_google_serper]):
             st.warning("⚠️ Please enable at least one search provider")
     
     # Research parameters - Collapsable
@@ -223,191 +298,42 @@ with st.sidebar:
             if len(st.session_state.sources) > 0:
                 st.markdown(f"**Sources Found:** {len(st.session_state.sources)}")
 
-# Research prompt templates
-SEARCH_QUERY_TEMPLATE = """Generate a search query for web research.
+# Note: All prompt templates have been moved to CommonUtils/research_utils.py
 
-MAIN TOPIC: {main_topic}
-SUBTOPIC: {topic}
+# Function to handle research stopping
+def stop_research():
+    st.session_state.stop_requested = True
+    st.session_state.research_in_progress = False
+    st.warning("Research process stopped by user.")
+    # Force a rerun to immediately update the UI
+    st.rerun()
 
-INSTRUCTIONS:
-1. Create a search query that combines the main topic and subtopic context
-2. Return ONLY the search query as plain text
-3. NO JSON, NO explanations, NO formatting
-4. Keep it under 15 words
-5. Make it specific and focused
-6. Include both main topic and subtopic aspects
-7. Do not use quotes or special characters
-
-BAD EXAMPLES:
-- {{\"query\": \"quantum computing basics\"}}
-- "quantum computing applications"
-- <thinking>Let me generate...</thinking>
-
-GOOD EXAMPLES:
-- quantum computing cryptography applications in cybersecurity
-- artificial intelligence machine learning applications healthcare diagnosis
-- renewable energy solar power efficiency improvements residential systems
-
-YOUR QUERY:"""
-
-SUBTOPICS_TEMPLATE = """Generate a list of comprehensive subtopics for detailed research on the given topic.
-
-TOPIC: {topic}
-
-INSTRUCTIONS:
-1. Analyze the topic and break it down into logical subtopics
-2. Each subtopic should be specific and focused
-3. Include both fundamental and advanced aspects
-4. Ensure coverage is comprehensive
-5. Each subtopic should be a clear, concise phrase
-
-EXAMPLE RESPONSE:
-{{
-    "subtopics": [
-        "Historical Development and Origins",
-        "Core Principles and Fundamentals",
-        "Modern Applications and Use Cases",
-        "Future Trends and Developments",
-        "Challenges and Limitations"
-    ]
-}}
-
-YOUR RESPONSE MUST BE A VALID JSON OBJECT WITH THE EXACT STRUCTURE SHOWN ABOVE.
-DO NOT include any additional text, formatting, or explanations.
-DO NOT use newlines within the JSON structure.
-
-RESPONSE:"""
-
-SUBTOPIC_SUMMARY_TEMPLATE = """Analyze and summarize the research findings for this topic.
-
-TOPIC: {topic}
-SEARCH_RESULTS: {results}
-
-INSTRUCTIONS:
-1. Analyze the search results thoroughly
-2. Extract key information and insights
-3. Organize findings logically
-4. Include specific data points and facts
-5. Cite sources for important claims
-
-YOU MUST RESPOND WITH A THIS EXACT STRUCTURE:
-"summary": 
-"Write your detailed summary here using markdown formatting",
-"key_points":
-"First key point goes here"
-        "Second key point goes here"
-
-REQUIREMENTS:
-1. No markdown code blocks or formatting
-2. All fields must be present
-
-
-EXAMPLE RESPONSE:
-"summary": 
-"## Topic Overview\\n\\nThis is a detailed summary of the findings...\\n\\n### Key Insights\\n1. First insight\\n2. Second insight",
-"key_points":
-"Major finding 1"
-"Major finding 2"
-"""
-
-FINAL_SYNTHESIS_TEMPLATE = """Create a comprehensive research overview based on all subtopic summaries.
-
-TOPIC: {topic}
-SUBTOPIC_SUMMARIES: {summaries}
-
-INSTRUCTIONS:
-1. Create a well-structured research report that includes:
-   - Executive summary of the entire research
-   - Key findings and insights across all subtopics
-   - Detailed subtopic summaries
-   - Final conclusions and recommendations
-2. Use clear markdown formatting for readability
-3. Reference specific subtopics when discussing findings
-4. Maintain clear connection between findings and their sources
-5. Include practical implications and next steps
-
-YOUR RESPONSE MUST follow this exact structure:
-```markdown
-# Research Report: [Topic]
-
-## Executive Summary
-[Provide a concise overview of the entire research, major themes, and key conclusions]
-
-## Key Research Findings
-[List 3-5 major findings that emerged across multiple subtopics]
-
-## Detailed Subtopic Analysis
-[For each subtopic, include:
-- Summary of findings
-- Key insights
-- Notable data points
-- Relevant sources]
-
-## Research Implications
-[Discuss the practical implications of the findings]
-
-## Recommendations
-[Provide actionable recommendations based on the research]
-
-## Next Steps
-[Suggest potential areas for further research or investigation]
-```
-
-REQUIREMENTS:
-1. Use proper markdown formatting
-2. Include ALL sections as shown above
-3. Reference specific subtopics when discussing findings
-4. Maintain clear connection between findings and their sources
-5. Be concise but comprehensive
-6. Focus on synthesis rather than repetition
-
-RESPONSE:"""
-
-SEARCH_RESULTS_EVALUATION_TEMPLATE = """Evaluate the quality and relevance of these search results.
-
-TOPIC: {topic}
-SEARCH_RESULTS: {results}
-
-INSTRUCTIONS:
-1. Analyze the provided content for:
-   - Relevance to the topic
-   - Information density
-   - Quality of sources
-   - Comprehensiveness
-2. Return ONLY a JSON object with your evaluation
-3. If the results are not relevant or comprehensive, return false for is_sufficient
-4. If the results are relevant and comprehensive, return true for is_sufficient
-5. Rate the quality of the results from 0-10
-6. Provide 2 reasons for your assessment
-
-YOUR RESPONSE MUST BE A VALID JSON OBJECT WITH THIS EXACT STRUCTURE:
-{{
-    "sufficient_data": True/False,
-    "quality_score": 0-10,
-    "reasons": [
-        "Reason 1 for assessment",
-        "Reason 2 for assessment"
-    ],
-    "missing_aspects": [
-        "Important aspect not covered 1",
-        "Important aspect not covered 2"
-    ]
-}}
-
-REQUIREMENTS:
-1. is_sufficient: Set to true only if results are both relevant and comprehensive
-2. quality_score: Rate from 0-10 where:
-   - 0-3: Poor quality/irrelevant
-   - 4-6: Moderate quality but incomplete
-   - 7-10: High quality and comprehensive
-3. Include at least 2 reasons for your assessment
-4. List missing aspects if quality_score < 7
-
-RESPONSE:"""
+# Function to clear research folder
+def clear_research_folder():
+    if st.session_state.output_folder and os.path.exists(st.session_state.output_folder):
+        try:
+            # List all items in the output folder
+            items = os.listdir(st.session_state.output_folder)
+            for item in items:
+                item_path = os.path.join(st.session_state.output_folder, item)
+                if os.path.isdir(item_path):
+                    shutil.rmtree(item_path)
+                else:
+                    os.remove(item_path)
+            st.success(f"Research folder '{st.session_state.output_folder}' has been cleared!")
+        except Exception as e:
+            st.error(f"Error clearing research folder: {str(e)}")
+    else:
+        st.error("Research folder does not exist or is not specified.")
 
 async def research_subtopic(subtopic, search_tools, synthesis_chain, main_topic, status_text):
     """Conduct research on a specific subtopic."""
     try:
+        # Check if stop was requested
+        if st.session_state.stop_requested:
+            status_text.warning("Research stopped by user.")
+            return None, None
+            
         # Initialize LLM chains
         llm = OllamaLLM(
             model=st.session_state.ollama_model,
@@ -446,6 +372,11 @@ async def research_subtopic(subtopic, search_tools, synthesis_chain, main_topic,
         search_attempt = 0
         
         while search_attempt < max_search_attempts:
+            # Check if stop was requested
+            if st.session_state.stop_requested:
+                status_text.warning("Research stopped by user.")
+                return None, None
+                
             search_attempt += 1
             
             # Generate contextual search query
@@ -457,7 +388,7 @@ async def research_subtopic(subtopic, search_tools, synthesis_chain, main_topic,
             detailed_results = []
             
             # Perform web searches based on enabled providers
-            if search_tools.get('web'):
+            if search_tools.get('web') and not st.session_state.stop_requested:
                 status_text.text("Performing DuckDuckGo web search...")
                 search_results = search_tools['web'].run(search_query)
                 urls = re.findall(r'https?://[^\s<>"]+|www\.[^\s<>"]+', search_results)
@@ -475,7 +406,7 @@ async def research_subtopic(subtopic, search_tools, synthesis_chain, main_topic,
                         })
             
             # Perform news search if enabled
-            if search_tools.get('news'):
+            if search_tools.get('news') and not st.session_state.stop_requested:
                 status_text.text("Performing DuckDuckGo news search...")
                 news_results = search_tools['news'].run(search_query)
                 news_urls = re.findall(r'https?://[^\s<>"]+|www\.[^\s<>"]+', news_results)
@@ -492,8 +423,50 @@ async def research_subtopic(subtopic, search_tools, synthesis_chain, main_topic,
                             "source": "news"
                         })
             
+            # Get Google Serper results if enabled
+            if search_tools.get('google_serper') and not st.session_state.stop_requested:
+                status_text.text(f"Performing Google Serper {search_tools['google_serper_type']} search...")
+                
+                # Get the search results with full metadata
+                google_results = search_tools['google_serper'].results(search_query)
+                
+                # Extract URLs based on the search type
+                google_urls = []
+                
+                if search_tools['google_serper_type'] == 'search':
+                    # Extract URLs from organic search results
+                    if 'organic' in google_results:
+                        google_urls = [item['link'] for item in google_results['organic'] if 'link' in item]
+                    
+                    # Add knowledge graph URL if available
+                    if 'knowledgeGraph' in google_results and 'descriptionLink' in google_results['knowledgeGraph']:
+                        google_urls.append(google_results['knowledgeGraph']['descriptionLink'])
+                
+                elif search_tools['google_serper_type'] == 'news':
+                    # Extract URLs from news results
+                    if 'news' in google_results:
+                        google_urls = [item['link'] for item in google_results['news'] if 'link' in item]
+                
+                elif search_tools['google_serper_type'] == 'images':
+                    # Extract source URLs from image results
+                    if 'images' in google_results:
+                        google_urls = [item['link'] for item in google_results['images'] if 'link' in item]
+                
+                status_text.text(f"Found URLs from Google Serper search: {google_urls}")
+                
+                # Process Google URLs
+                for url in google_urls:
+                    status_text.text(f"Processing Google Serper URL: {url}")
+                    content = await fetch_and_process_url(url, status_text)
+                    if content:
+                        detailed_results.append({
+                            "url": url,
+                            "content": content,
+                            "source": f"google_{search_tools['google_serper_type']}"
+                        })
+            
             # Get Wikipedia results if enabled
-            if search_tools.get('wikipedia'):
+            if search_tools.get('wikipedia') and not st.session_state.stop_requested:
                 status_text.text("Retrieving Wikipedia results...")
                 wikipedia_results = search_tools['wikipedia'].get_relevant_documents(search_query)
                 
@@ -510,6 +483,11 @@ async def research_subtopic(subtopic, search_tools, synthesis_chain, main_topic,
             summaries_subtopic = ""
 
             for result in detailed_results:
+                # Check if stop was requested
+                if st.session_state.stop_requested:
+                    status_text.warning("Research stopped by user.")
+                    return None, None
+                    
                 # Evaluate combined results
                 try:
                     source_type = result['source'].capitalize()
@@ -533,6 +511,11 @@ async def research_subtopic(subtopic, search_tools, synthesis_chain, main_topic,
                     st.error(f"Error evaluating search results: {str(e)}")
                     continue
                 
+        # Check if stop was requested
+        if st.session_state.stop_requested:
+            status_text.warning("Research stopped by user.")
+            return None, None
+            
         status_text.text(f"Synthesizing findings for {subtopic}")
         # Synthesize findings using combined results
         synthesis_result = (await synthesis_chain.ainvoke({
@@ -559,12 +542,29 @@ async def conduct_research(topic):
     4. Create final synthesis
     """
     try:
+        # Store the research topic in session state for recovery after stop/restart
+        st.session_state.current_research_topic = topic
+        
         # Initialize progress tracking
         progress_bar = st.progress(0)
         status_text = st.empty()
         subtopic_status = st.empty()
         debug_container = st.empty()
         
+        # Update UI and check if research should be stopped
+        def researchUpdate(message="", progress_value=None):
+            """Update UI and check if research should be stopped"""
+            if message:
+                status_text.text(message)
+            if progress_value is not None:
+                progress_bar.progress(progress_value)
+            # Check if stop has been requested - important for responsiveness
+            if st.session_state.stop_requested:
+                st.warning("Research process stopping...")
+                st.session_state.research_in_progress = False
+                return True
+            return False
+            
         # Initialize search tools based on user configuration
         search_tools = {}
         if use_duckduckgo:
@@ -573,11 +573,24 @@ async def conduct_research(topic):
             search_tools['news'] = DuckDuckGoSearchResults(backend="news")
         if use_wikipedia:
             search_tools['wikipedia'] = WikipediaRetriever()
+        
+        # Add Google Serper if enabled and API key is provided
+        if use_google_serper and st.session_state.serper_api_key:
+            # Set the API key for the GoogleSerperAPIWrapper
+            os.environ["SERPER_API_KEY"] = st.session_state.serper_api_key
+            
+            # Initialize the GoogleSerperAPIWrapper with the selected type
+            search_tools['google_serper'] = GoogleSerperAPIWrapper(type=google_serper_type)
+            search_tools['google_serper_type'] = google_serper_type
             
         if not search_tools:
             st.error("Please enable at least one search provider to proceed")
             return
 
+        # Update UI and check if research should be stopped
+        if researchUpdate("Initializing research process...", 0.05):
+            return
+            
         # Initialize the LLM and chains
         llm = OllamaLLM(
             model=st.session_state.ollama_model,
@@ -619,21 +632,34 @@ async def conduct_research(topic):
         )
             
         # Step 1: Create research directory structure
-        if not output_folder:
+        if not st.session_state.output_folder:
             st.error("Please specify an output folder path")
             return
             
-        research_dir, subtopics_dir = create_research_directory(output_folder, topic)
-        status_text.text("Created research directory structure...")
-        progress_bar.progress(0.1)
+        if researchUpdate("Creating research directory...", 0.07):
+            return
+            
+        research_dir, subtopics_dir = create_research_directory(st.session_state.output_folder, topic)
+        if researchUpdate("Research directory created", 0.1):
+            return
         
         # Step 2: Generate subtopics
-        status_text.text("Generating research subtopics...")
+        if researchUpdate("Generating research subtopics...", 0.15):
+            return
+        
+        # Check if stop was requested
+        if st.session_state.stop_requested:
+            status_text.warning("Research stopped by user.")
+            return
+            
         try:
             subtopics_result = (await subtopics_chain.ainvoke({"topic": topic, "num_subtopics": st.session_state.num_subtopics}))["text"]
             # Clean up the JSON string
             subtopics_result = clean_json_string(subtopics_result)
             
+            if researchUpdate(f"Processing subtopics result...", 0.18):
+                return
+                
             subtopics_data = json.loads(subtopics_result)
             if not isinstance(subtopics_data, dict) or 'subtopics' not in subtopics_data:
                 raise ValueError("Invalid subtopics format. Expected a dictionary with 'subtopics' key.")
@@ -642,7 +668,8 @@ async def conduct_research(topic):
             if not isinstance(subtopics, list) or len(subtopics) == 0:
                 raise ValueError("No valid subtopics generated.")
             
-            status_text.text(f"Generated {len(subtopics)} subtopics")
+            if researchUpdate(f"Generated {len(subtopics)} subtopics", 0.2):
+                return
             
         except Exception as e:
             st.error(f"Error generating subtopics: {str(e)}")
@@ -656,16 +683,25 @@ async def conduct_research(topic):
             main_content += f"{idx}. {subtopic}\n"
         write_markdown_file(main_topic_file, main_content)
         
-        progress_bar.progress(0.2)
+        if researchUpdate("Starting subtopic research...", 0.25):
+            return
         
         # Step 3: Research each subtopic
         all_summaries = []
         all_sources = []  # Track all sources across subtopics
         for idx, subtopic in enumerate(subtopics[:st.session_state.num_subtopics], 1):
-            status_text.text(f"Researching subtopic {idx}/{len(subtopics)}: {subtopic}")
+            # Check after each subtopic - critical for responsiveness
+            if researchUpdate(f"Researching subtopic {idx}/{len(subtopics)}: {subtopic}", 
+                         0.25 + (0.55 * ((idx-1) / len(subtopics)))):
+                return
             
             # Research the subtopic with main topic context
             result, webpage_contents = await research_subtopic(subtopic, search_tools, synthesis_chain, topic, subtopic_status)
+
+            # Check after each subtopic is complete
+            if researchUpdate(f"Completed research on subtopic {idx}", 
+                         0.25 + (0.55 * (idx / len(subtopics)))):
+                return
 
             if result:
                 # Create subtopic file
@@ -694,11 +730,15 @@ async def conduct_research(topic):
                     "summary": result,
                 })
             
-            progress = 0.2 + (0.6 * (idx / len(subtopics)))
-            progress_bar.progress(progress)
+            # Update UI after writing files
+            if researchUpdate(f"Saved research for subtopic {idx}", 
+                        0.25 + (0.55 * (idx / len(subtopics))) + 0.01):
+                return
         
         # Step 4: Create final synthesis
-        status_text.text("Creating final research synthesis...")
+        if researchUpdate("Creating final research synthesis...", 0.85):
+            return
+            
         try:
             final_result = (await final_synthesis_chain.ainvoke({
                 "topic": topic,
@@ -718,8 +758,9 @@ async def conduct_research(topic):
             st.error(f"Error creating final synthesis: {str(e)}")
             return
         
-        progress_bar.progress(1.0)
-        status_text.text("Research complete!")
+        if researchUpdate("Research complete!", 1.0):
+            return
+            
         debug_container.empty()
         
         # Show success message with directory location
@@ -743,36 +784,64 @@ research_topic = st.text_input(
     help="Be specific enough to get targeted results, but broad enough to explore the topic"
 )
 
-col1, col2 = st.columns([3, 1])
+# Button row with Start, Stop, and Clear buttons
+col1, col2, col3 = st.columns([3, 1, 1])
 with col1:
-    if st.button(
+    start_button = st.button(
         "🚀 Start Research", 
         disabled=st.session_state.research_in_progress,
         use_container_width=True,
         type="primary"
-    ):
+    )
+    
+    if start_button:
         if not research_topic:
             st.warning("Please enter a research topic.")
         elif not hasattr(st.session_state, 'ollama_model') or not st.session_state.ollama_model:
             st.error("Please select an Ollama model in the Model Settings page first.")
-        elif not output_folder:
+        elif not st.session_state.output_folder:
             st.error("Please specify an output folder path for saving research results.")
         else:
+            # Reset any previous stop_requested flag
+            st.session_state.stop_requested = False
             st.session_state.research_in_progress = True
             st.session_state.research_summary = ""
             st.session_state.sources = []
             st.session_state.iteration_count = 0
+            # Store research topic for potential recovery
+            st.session_state.current_research_topic = research_topic 
             asyncio.run(conduct_research(research_topic))
+            
+            # Check if research was stopped - provide feedback
+            if st.session_state.stop_requested:
+                st.warning(f"Research on '{research_topic}' was stopped by user request.")
+            else:
+                st.success(f"Research on '{research_topic}' completed successfully!")
 
 with col2:
+    stop_button = st.button(
+        "⏹️ Stop", 
+        disabled=not st.session_state.research_in_progress,
+        use_container_width=True,
+        type="secondary"
+    )
+    
+    if stop_button:
+        stop_research()
+
+with col3:
     if st.button(
-        "📋 Clear Results", 
+        "🗑️ Clear", 
         disabled=st.session_state.research_in_progress,
         use_container_width=True
     ):
         st.session_state.research_summary = ""
         st.session_state.sources = []
         st.session_state.iteration_count = 0
+        # Show modal to confirm clearing research folder
+        clear_folder = st.checkbox("Also clear research folder?", value=False)
+        if clear_folder:
+            clear_research_folder()
         st.rerun()
 
 # Display research results
@@ -804,23 +873,69 @@ if st.session_state.research_summary:
             st.info("No sources are available for this research.")
     
     with tabs[2]:
-        if output_folder and os.path.exists(output_folder):
+        if st.session_state.output_folder and os.path.exists(st.session_state.output_folder):
             st.markdown("### Research Files")
-            st.markdown(f"All research files are saved to: `{output_folder}`")
+            st.markdown(f"All research files are saved to: `{st.session_state.output_folder}`")
             
-            if os.path.exists(os.path.join(output_folder, sanitize_filename(research_topic))):
-                research_dir = os.path.join(output_folder, sanitize_filename(research_topic))
-                st.success(f"Research directory created: {research_dir}")
-                
-                overview_file = os.path.join(research_dir, "research_overview.md")
-                if os.path.exists(overview_file):
-                    st.download_button(
-                        label="Download Full Research Report",
-                        data=open(overview_file, "r", encoding="utf-8").read(),
-                        file_name=f"{sanitize_filename(research_topic)}_report.md",
-                        mime="text/markdown",
+            # Get list of all research directories
+            research_folders = [d for d in os.listdir(st.session_state.output_folder) 
+                              if os.path.isdir(os.path.join(st.session_state.output_folder, d))]
+            
+            if research_folders:
+                # Either use current topic or let user select from all available research folders
+                if research_topic and os.path.exists(os.path.join(st.session_state.output_folder, sanitize_filename(research_topic))):
+                    # If current research topic exists, default to it
+                    current_research_dir = sanitize_filename(research_topic)
+                    st.success(f"Showing files for current research topic: {research_topic}")
+                else:
+                    # Let user select from available research folders
+                    current_research_dir = st.selectbox(
+                        "Select Research Project",
+                        options=research_folders,
+                        format_func=lambda x: x.replace("_", " ").title(),
+                        help="Choose a completed research project to view its files"
                     )
+                    
+                if current_research_dir:
+                    research_dir = os.path.join(st.session_state.output_folder, current_research_dir)
+                    
+                    # List all files in the research directory
+                    all_files = []
+                    for root, dirs, files in os.walk(research_dir):
+                        for file in files:
+                            if file.endswith('.md'):
+                                rel_path = os.path.relpath(os.path.join(root, file), research_dir)
+                                all_files.append((rel_path, os.path.join(root, file)))
+                    
+                    if all_files:
+                        st.markdown("#### Available Files")
+                        for rel_path, full_path in all_files:
+                            # Create columns for file name and download button
+                            col1, col2 = st.columns([3, 1])
+                            with col1:
+                                st.markdown(f"📄 **{rel_path}**")
+                            with col2:
+                                st.download_button(
+                                    label="Download",
+                                    data=open(full_path, "r", encoding="utf-8").read(),
+                                    file_name=os.path.basename(full_path),
+                                    mime="text/markdown",
+                                    key=f"download_{rel_path}"
+                                )
+                            
+                            # Preview option for main files
+                            if rel_path == "research_overview.md" or rel_path.count('/') == 0:
+                                with st.expander("Preview Content", expanded=False):
+                                    try:
+                                        file_content = open(full_path, "r", encoding="utf-8").read()
+                                        # Only show first 500 characters of content as preview
+                                        preview = file_content[:1000] + "..." if len(file_content) > 1000 else file_content
+                                        st.markdown(preview)
+                                    except Exception as e:
+                                        st.error(f"Error reading file: {str(e)}")
+                    else:
+                        st.warning("No markdown files found in the research directory.")
             else:
-                st.warning("Research directory not found. Files may not have been saved properly.")
+                st.info("No research folders found. Run a research query to generate files.")
         else:
             st.warning("Output folder not found or not specified.") 
