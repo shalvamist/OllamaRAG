@@ -165,6 +165,8 @@ def parse_message_content(content):
 st.set_page_config(
     page_title="Chat - OllamaRAG",
     page_icon="💬",
+    initial_sidebar_state="expanded",
+    layout="wide"
 )
 
 # Custom CSS for styling
@@ -172,18 +174,64 @@ st.markdown("""
 <style>
     /* Main background and text colors */
     .stApp {
-        background-color: #a9b89e;
         color: #1a2234;
     }
     
-    /* Main content width and layout */
-    .block-container {
-        max-width: 80% !important;
-        padding: 2rem;
-        background-color: #fff;
+    /* Headers */
+    h1 {
+        color: #0D47A1 !important;
+        margin-bottom: 1rem !important;
+        font-size: 2.2em !important;
+        font-weight: 800 !important;
+    }
+    
+    h2 {
+        color: #1E88E5 !important;
+        margin-bottom: 0.8rem !important;
+        font-size: 1.8em !important;
+        font-weight: 700 !important;
+    }
+    
+    h3 {
+        color: #1E88E5 !important;
+        margin-bottom: 0.6rem !important;
+        font-size: 1.4em !important;
+        font-weight: 600 !important;
+    }
+    
+    /* Card styling */
+    [data-testid="stExpander"] {
+        border: none !important;
+        box-shadow: none !important;
+    }
+    
+    /* Buttons */
+    .stButton button {
+        border-radius: 4px;
+    }
+    
+    /* Container borders */
+    [data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlock"] > div[style*="flex-direction: column"] > div[data-testid="stVerticalBlock"] {
         border-radius: 10px;
-        box-shadow: 0 8px 24px rgba(0,0,0,0.15);
-        margin: 1rem auto;
+        padding: 1rem;
+    }
+    
+    /* Card headings */
+    .card-heading {
+        color: #555;
+        font-weight: 600;
+        font-size: 0.9rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    /* Success and warning messages */
+    .stSuccess, .stWarning, .stError, .stInfo {
+        border-radius: 4px;
+    }
+    
+    /* Input fields */
+    .stTextInput input, .stNumberInput input, .stTextArea textarea, .stSelectbox select {
+        border-radius: 4px;
     }
 
     /* Chat container */
@@ -195,6 +243,9 @@ st.markdown("""
         flex-direction: column;
         gap: 0.5rem;
         max-height: 600px;
+        background-color: #f9f9f9;
+        border-radius: 8px;
+        border: 1px solid #e0e0e0;
     }
 
     /* Chat input container */
@@ -229,15 +280,15 @@ st.markdown("""
     
     /* User message */
     [data-testid="stChatMessage"][data-testid="user"] {
-        background-color: #ebf8ff;
-        border-color: #3498db;
+        background-color: #e3f2fd;
+        border-color: #1E88E5;
         margin-left: auto;
     }
     
     /* Assistant message */
     [data-testid="stChatMessage"][data-testid="assistant"] {
-        background-color: #f0fff4;
-        border-color: #2ecc71;
+        background-color: #f0f7ff;
+        border-color: #0D47A1;
         margin-right: auto;
     }
 
@@ -253,144 +304,13 @@ st.markdown("""
         }
     }
 
-    /* Headers in chat */
-    .main-header {
-        position: sticky;
-        top: 0;
-        background: white;
-        z-index: 100;
-        padding: 1rem 0;
-        border-bottom: 1px solid #e2e8f0;
-    }
-
-    /* Status bar */
-    .status-bar {
-        position: sticky;
-        top: 80px;
-        background: white;
-        z-index: 99;
-        padding: 0.5rem 0;
-        border-bottom: 1px solid #e2e8f0;
-    }
-    
-    /* Headers */
-    h1 {
-        color: #2c3e50 !important;
-        margin-bottom: 1rem !important;
-        margin-top: 1rem !important;
-        font-size: 2.2em !important;
-        padding-bottom: 0.5rem !important;
-        font-weight: 800 !important;
-        border-bottom: 3px solid #3498db !important;
-    }
-    
-    h2 {
-        color: #2c3e50 !important;
-        margin-bottom: 0.8rem !important;
-        margin-top: 0.8rem !important;
-        font-size: 1.8em !important;
-        padding-bottom: 0.4rem !important;
-        font-weight: 700 !important;
-    }
-    
-    h3 {
-        color: #2c3e50 !important;
-        margin-bottom: 0.6rem !important;
-        margin-top: 0.6rem !important;
-        font-size: 1.4em !important;
-        padding-bottom: 0.3rem !important;
-        font-weight: 600 !important;
-    }
-    
-    /* Reduce markdown spacing */
-    .stMarkdown {
-        margin-bottom: 0.3rem !important;
-    }
-    
-    /* Buttons */
-    .stButton button {
-        background-color: #3498db;
-        color: #fff;
-        border: none;
-        font-weight: bold;
-        padding: 0.4rem 0.8rem;
-        border-radius: 6px;
-        min-height: 40px;
-        margin: 0.3rem 0;
-        font-size: 0.9em;
-    }
-    
-    /* Messages */
-    .stSuccess, .stError, .stInfo, .stWarning {
-        padding: 0.5rem;
-        border-radius: 6px;
-        margin: 0.3rem 0;
-        font-size: 0.9em;
-    }
-    
-    /* Input fields */
-    .stTextInput input, .stNumberInput input, .stTextArea textarea {
-        background-color: #f8fafc;
-        color: #2c3e50;
-        border: 2px solid #3498db;
-        border-radius: 6px;
-        padding: 0.4rem;
-        min-height: 40px;
-        font-size: 0.9em;
-        margin: 0.2rem 0;
-    }
-    
-    /* Selectbox */
-    .stSelectbox select {
-        background-color: #f8fafc;
-        color: #2c3e50;
-        border: 2px solid #3498db;
-        border-radius: 6px;
-        padding: 0.4rem;
-        min-height: 40px;
-        font-size: 0.9em;
-        margin: 0.2rem 0;
-    }
-    
-    /* Checkbox */
-    .stCheckbox {
-        margin: 0.2rem 0;
-    }
-    .stCheckbox label {
-        color: #2c3e50 !important;
-        font-size: 0.9em;
-        padding: 0.2rem 0;
-    }
-    
-    /* Divider */
-    hr {
-        margin: 0.8rem 0;
-        border-width: 1px;
-    }
-
-    /* Section spacing */
-    .element-container {
-        margin-bottom: 0.5rem !important;
-    }
-
-    /* Column gaps */
-    .row-widget {
-        gap: 0.5rem !important;
-    }
-
-    /* Help text */
-    .stTextInput .help-text, .stNumberInput .help-text, .stSelectbox .help-text {
-        font-size: 0.8em;
-        margin-top: 0.1rem;
-        color: #666;
-    }
-
     /* Thinking process container styling */
     .thinking-details {
         margin: 1em 0;
         padding: 0.5em;
         border-radius: 4px;
         background-color: #f8f9fa;
+        border: 1px solid #e0e0e0;
     }
 
     .thinking-content {
@@ -398,6 +318,7 @@ st.markdown("""
         padding: 1em;
         background-color: #f1f3f4;
         border-radius: 4px;
+        border-left: 3px solid #1E88E5;
     }
 
     .thinking-text {
@@ -415,6 +336,8 @@ st.markdown("""
         cursor: pointer;
         padding: 0.5em;
         border-radius: 4px;
+        font-weight: 500;
+        color: #1E88E5;
     }
 
     details > summary:hover {
@@ -470,32 +393,31 @@ st.markdown("""
 if "messages" not in st.session_state:
     st.session_state.messages = [{"role": "assistant", "content": "How may I assist you today?"}]
 
-st.title("💬 Chat Interface")
+# Title with centered styling to match other pages
+st.markdown("""
+<h1 style="text-align: center; color: #0D47A1; margin-bottom: 20px;">💬 Chat with Ollama</h1>
+""", unsafe_allow_html=True)
 
 # Check if model is configured
 if not st.session_state.chatReady or st.session_state.ollama_model is None:
-    st.error("Please configure your Ollama model in the Model Settings page before starting a chat.")
+    # Display model configuration message in a card-like container
     st.markdown("""
-    To get started:
-    1. Go to the **🦙 Model Settings** page
-    2. Select a model and configure its parameters
-    3. Click "Apply Settings"
-    4. Return here to start chatting
-    """)
-else:
-    # Chat interface
-    st.markdown(f"""
-    Currently using model: **{st.session_state.ollama_model}**  
-    """)
+    <div style="background-color: #ffebee; padding: 20px; border-radius: 10px; margin-bottom: 30px; border-left: 5px solid #f44336;">
+    <h2 style="color: #f44336; margin-top: 0;">Model Not Configured</h2>
     
-    # Status indicators
-    if st.session_state.db_ready:
-        st.success("RAG Database: Ready")
-    else:
-        st.warning("RAG Database: Not configured")
-
-    st.divider()
-
+    <p>Please configure your Ollama model in the Model Settings page before starting a chat.</p>
+    
+    <p><strong>To get started:</strong></p>
+    <ol>
+      <li>Go to the <strong>🦙 Model Settings</strong> page</li>
+      <li>Select a model and configure its parameters</li>
+      <li>Click "Apply Settings"</li>
+      <li>Return here to start chatting</li>
+    </ol>
+    </div>
+    """, unsafe_allow_html=True)
+else:
+    # Display messages
     for message in st.session_state.messages:
         st.empty()
         with st.chat_message(message["role"]):
@@ -506,18 +428,34 @@ else:
 
     # Save Chat Dialog
     if st.session_state.show_save_dialog:
+        st.markdown("""
+        <div style="background-color: #f5f5f5; padding: 15px; border-radius: 10px; margin: 15px 0;">
+        """, unsafe_allow_html=True)
+        
         with st.form(key="save_chat_form"):
-            st.subheader("Save Chat")
-            chat_name = st.text_input("Enter a name for this chat:")
-            col1, col2 = st.columns([1, 4])
+            st.subheader("Save Conversation")
+            chat_name = st.text_input("Enter a name for this chat:", 
+                                     placeholder="Enter descriptive name...",
+                                     help="Choose a unique name that helps you remember this conversation")
+            col1, col2 = st.columns([1, 1])
             with col1:
-                submitted = st.form_submit_button("Save")
+                submitted = st.form_submit_button("Save", use_container_width=True)
+            with col2:
+                cancel = st.form_submit_button("Cancel", use_container_width=True)
+            
             if submitted and chat_name:
                 save_current_chat(chat_name)
                 st.success(f"Chat saved as: {chat_name}")
+            elif cancel:
+                st.session_state.show_save_dialog = False
+                st.rerun()
+        
+        st.markdown("""
+        </div>
+        """, unsafe_allow_html=True)
 
     # Chat input
-    if prompt := st.chat_input("Ask a question..."):
+    if prompt := st.chat_input("What's on your mind?"):
         # Add user message to UI
         st.session_state.messages.append({"role": "user", "content": prompt})
         
@@ -634,60 +572,92 @@ else:
                 # Store the response with the collapsible thinking section
                 st.session_state.messages.append({"role": "assistant", "content": final_response})
 
-    # Display chat settings and history
+    # Sidebar content
     with st.sidebar:
-        # Chat Controls Section
-        st.header("💬 Chat Controls")
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.button("Clear History", on_click=clear_chat_history)
-        with col2:
-            if st.button("New Chat"):
-                clear_chat_history()
-        with col3:
-            if st.button("Save Chat", on_click=toggle_save_dialog, disabled=len(st.session_state.messages) <= 1):
+        # Smaller title with more subtle styling - exactly matching Model Settings page
+        st.markdown("""
+        <h2 style="font-size: 1.5em; color: #0D47A1; margin-bottom: 15px; padding-bottom: 5px; border-bottom: 1px solid #e0e0e0;">
+        ⚙️ Chat Settings
+        </h2>
+        """, unsafe_allow_html=True)
+        
+        # Model Status Section - Collapsable
+        with st.expander("🤖 Model Status", expanded=False):
+            if hasattr(st.session_state, 'ollama_model') and st.session_state.ollama_model:
+                st.success("Model Connected")
+                st.info(f"**Model:** {st.session_state.ollama_model}")
+                
+                # Display model parameters in a more organized way
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.markdown("**Parameters:**")
+                    st.markdown(f"- Temperature: {st.session_state.temperature}")
+                with col2:
+                    st.markdown("**Context:**")
+                    st.markdown(f"- Window: {st.session_state.contextWindow}")
+                    st.markdown(f"- Max Tokens: {st.session_state.newMaxTokens}")
+            else:
+                st.error("No Model Selected")
+                st.warning("Please select a model in the Model Settings page")
+        
+        # Chat Controls Section - Collapsable
+        with st.expander("💬 Chat Controls", expanded=False):
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("🗑️ Clear History", use_container_width=True):
+                    clear_chat_history()
+            with col2:
+                if st.button("✨ New Chat", use_container_width=True):
+                    clear_chat_history()
+            
+            # Save chat button with better styling
+            if st.button("💾 Save Chat", on_click=toggle_save_dialog, 
+                        disabled=len(st.session_state.messages) <= 1,
+                        use_container_width=True):
                 pass
         
-        st.divider()
+        # RAG Status display - Collapsable
+        with st.expander("🔗 RAG Status", expanded=False):
+            if st.session_state.db_ready:
+                st.success("RAG System: Connected")
+                
+                # Display RAG settings in a cleaner format
+                st.markdown("**Retrieval Settings:**")
+                st.markdown(f"- Documents: {st.session_state.dbRetrievalAmount}")
+                st.markdown(f"- Contextual: {'✅' if st.session_state.ContextualRAG else '❌'}")
+                st.markdown(f"- BM25: {'✅' if st.session_state.ContextualBM25RAG else '❌'}")
+            else:
+                st.warning("RAG System: Not Configured")
+                st.info("Visit the RAG Configuration page to set up document retrieval")
         
-        # Chat Settings Section
-        st.header("⚙️ Chat Settings")
-        st.markdown("""
-        **Model Parameters:**
-        - Temperature: {:.2f}
-        - Max Tokens: {}
-        - Context Window: {}
-        
-        **RAG Settings:**
-        - Documents Retrieved: {}
-        - Contextual RAG: {}
-        - BM25 Retrieval: {}
-        """.format(
-            st.session_state.temperature,
-            st.session_state.newMaxTokens,
-            st.session_state.contextWindow,
-            st.session_state.dbRetrievalAmount,
-            "Enabled" if st.session_state.ContextualRAG else "Disabled",
-            "Enabled" if st.session_state.ContextualBM25RAG else "Disabled"
-        ))
-
-        # Saved Chats Section
-        st.header("💾 Saved Chats")
-        recent_conversations = get_recent_conversations()
-        
-        if recent_conversations:
-            for conv in recent_conversations:
-                col1, col2 = st.columns([4, 1])
-                with col1:
-                    # Display just the chat name without timestamp
-                    chat_name = conv['first_message'].split(" (")[0]  # Get name without timestamp
-                    if st.button(f"{chat_name}", key=f"conv_{conv['id']}"):
-                        load_conversation(conv['id'])
-                with col2:
-                    if st.button("🗑️", key=f"del_{conv['id']}"):
-                        delete_conversation(conv['id'])
-                        if 'conversation_id' in st.session_state and st.session_state.conversation_id == conv['id']:
-                            clear_chat_history()
-                        st.rerun()
-        else:
-            st.info("No saved chats available") 
+        # Saved Chats Section - Collapsable
+        with st.expander("💾 Saved Conversations", expanded=False):
+            recent_conversations = get_recent_conversations()
+            
+            if recent_conversations:
+                for idx, conv in enumerate(recent_conversations):
+                    # Create a container for each conversation
+                    st.markdown(f"""
+                    <div style="border: 1px solid #e0e0e0; border-radius: 5px; padding: 8px; margin-bottom: 8px; background-color: {'#f5f5f5' if idx % 2 == 0 else 'white'}">
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    col1, col2 = st.columns([4, 1])
+                    with col1:
+                        # Display just the chat name without timestamp
+                        chat_name = conv['first_message'].split(" (")[0]  # Get name without timestamp
+                        if st.button(f"{chat_name}", key=f"conv_{conv['id']}", use_container_width=True):
+                            load_conversation(conv['id'])
+                    with col2:
+                        if st.button("🗑️", key=f"del_{conv['id']}", use_container_width=True):
+                            delete_conversation(conv['id'])
+                            if 'conversation_id' in st.session_state and st.session_state.conversation_id == conv['id']:
+                                clear_chat_history()
+                            st.rerun()
+            else:
+                st.info("No saved conversations available")
+                st.markdown("""
+                <div style="font-size: 0.9em; color: #666; margin-top: 10px;">
+                Conversations will appear here after you save them using the 'Save Chat' button.
+                </div>
+                """, unsafe_allow_html=True) 

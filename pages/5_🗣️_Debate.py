@@ -94,9 +94,14 @@ Choose your debate topic and configure each bot's stance to begin!
 
 # Sidebar configuration
 with st.sidebar:
-    st.header("⚙️ Debate Configuration")
+    # Smaller title with more subtle styling - exactly matching other pages
+    st.markdown("""
+    <h2 style="font-size: 1.5em; color: #0D47A1; margin-bottom: 15px; padding-bottom: 5px; border-bottom: 1px solid #e0e0e0;">
+    ⚙️ Debate Settings
+    </h2>
+    """, unsafe_allow_html=True)
     
-    # Model Configuration Section in an expander
+    # Model Configuration Section - Collapsable
     with st.expander("🤖 Model Configuration", expanded=False):
         # Get available models
         try:
@@ -140,12 +145,9 @@ with st.sidebar:
         
         if not st.session_state.bot1_model or not st.session_state.bot2_model or not st.session_state.judge_model:
             st.error("Please select models for both bots and the judge")
-        
-        st.divider()
-        
-        # Model Parameters Configuration
-        st.subheader("⚙️ Model Parameters")
-        
+    
+    # Model Parameters Configuration - Collapsable
+    with st.expander("⚙️ Model Parameters", expanded=False):
         st.session_state.contextWindow = st.slider(
             "Context Window",
             min_value=512,
@@ -171,16 +173,13 @@ with st.sidebar:
             help="Maximum number of tokens to generate"
         )
     
-    st.divider()
-    
-    # Bot Configuration
-    st.subheader("🎭 Bot Stances")
-    
-    # Bot 1 Configuration
-    st.markdown("### Bot 1 (Pro)")
-    st.session_state.bot1_stance = st.text_area(
-        "Bot 1 System Prompt",
-        value=st.session_state.bot1_stance or """You are a friendly and engaging debater who supports the given topic. Your style is warm and approachable:
+    # Bot Stances Configuration - Collapsable
+    with st.expander("🎭 Bot Stances", expanded=False):
+        # Bot 1 Configuration
+        st.markdown("### Bot 1 (Pro)")
+        st.session_state.bot1_stance = st.text_area(
+            "Bot 1 System Prompt",
+            value=st.session_state.bot1_stance or """You are a friendly and engaging debater who supports the given topic. Your style is warm and approachable:
 
 💬 Conversational Tone:
 - Share insights like you're talking to a friend: "You know what's fascinating about this..."
@@ -206,15 +205,15 @@ Remember to:
 - Keep the conversation flowing naturally while backing points with evidence
 - Share research findings as exciting discoveries rather than dry facts
 - Maintain a friendly, engaging tone even in disagreement""",
-        height=150,
-        help="Define the stance and personality of Bot 1"
-    )
-    
-    # Bot 2 Configuration
-    st.markdown("### Bot 2 (Con)")
-    st.session_state.bot2_stance = st.text_area(
-        "Bot 2 System Prompt",
-        value=st.session_state.bot2_stance or """You are a thoughtful and curious debater who challenges the given topic. Your style encourages deeper exploration:
+            height=150,
+            help="Define the stance and personality of Bot 1"
+        )
+        
+        # Bot 2 Configuration
+        st.markdown("### Bot 2 (Con)")
+        st.session_state.bot2_stance = st.text_area(
+            "Bot 2 System Prompt",
+            value=st.session_state.bot2_stance or """You are a thoughtful and curious debater who challenges the given topic. Your style encourages deeper exploration:
 
 💭 Thoughtful Approach:
 - Start with curiosity: "That's an interesting perspective. I wonder if we could explore..."
@@ -240,29 +239,27 @@ Remember to:
 - Keep the tone curious and inviting while presenting evidence
 - Share research as part of a natural conversation
 - Maintain a respectful, engaging dialogue even in disagreement""",
-        height=150,
-        help="Define the stance and personality of Bot 2"
-    )
+            height=150,
+            help="Define the stance and personality of Bot 2"
+        )
     
-    st.divider()
-    
-    # Debate Parameters
-    st.subheader("⚡ Debate Parameters")
-    max_turns = st.slider(
-        "Number of Turns",
-        min_value=1,
-        max_value=10,
-        value=3,
-        help="Maximum number of back-and-forth exchanges"
-    )
-    
-    response_length = st.slider(
-        "Response Length",
-        min_value=100,
-        max_value=1000,
-        value=300,
-        help="Maximum length of each bot's response"
-    )
+    # Debate Parameters Configuration - Collapsable
+    with st.expander("⚡ Debate Parameters", expanded=False):
+        max_turns = st.slider(
+            "Number of Turns",
+            min_value=1,
+            max_value=10,
+            value=3,
+            help="Maximum number of back-and-forth exchanges"
+        )
+        
+        response_length = st.slider(
+            "Response Length",
+            min_value=100,
+            max_value=1000,
+            value=300,
+            help="Maximum length of each bot's response"
+        )
 
 # Debate prompt templates
 DEBATE_RESPONSE_TEMPLATE = """You are participating in a structured debate.

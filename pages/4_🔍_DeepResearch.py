@@ -27,37 +27,74 @@ from CommonUtils.research_utils import (
 st.set_page_config(
     page_title="Deep Research - OllamaRAG",
     page_icon="🔍",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
+    layout="wide"
 )
 
 # Custom CSS styling
 st.markdown("""
 <style>
+    /* Main background and text colors */
     .stApp {
-        background-color: #a9b89e;
         color: #1a2234;
     }
     
-    .block-container {
-        max-width: 80% !important;
-        padding: 2rem;
-        background-color: #fff;
-        border-radius: 10px;
-        box-shadow: 0 8px 24px rgba(0,0,0,0.15);
-        margin: 1rem auto;
+    /* Headers */
+    h1 {
+        color: #0D47A1 !important;
+        margin-bottom: 1rem !important;
+        font-size: 2.2em !important;
+        font-weight: 800 !important;
     }
     
-    h1 {
-        color: #2c3e50 !important;
-        border-bottom: 3px solid #3498db !important;
-        padding-bottom: 0.5rem !important;
+    h2 {
+        color: #1E88E5 !important;
+        margin-bottom: 0.8rem !important;
+        font-size: 1.8em !important;
+        font-weight: 700 !important;
     }
-
+    
+    /* Card styling */
+    [data-testid="stExpander"] {
+        border: none !important;
+        box-shadow: none !important;
+    }
+    
+    /* Buttons */
+    .stButton button {
+        border-radius: 4px;
+    }
+    
+    /* Container borders */
+    [data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlock"] > div[style*="flex-direction: column"] > div[data-testid="stVerticalBlock"] {
+        border-radius: 10px;
+        padding: 1rem;
+    }
+    
+    /* Card headings */
+    .card-heading {
+        color: #555;
+        font-weight: 600;
+        font-size: 0.9rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    /* Success and warning messages */
+    .stSuccess, .stWarning, .stError, .stInfo {
+        border-radius: 4px;
+    }
+    
+    /* Input fields */
+    .stTextInput input, .stNumberInput input, .stTextArea textarea, .stSelectbox select {
+        border-radius: 4px;
+    }
+    
+    /* Research specific styling */
     .research-summary {
-        background-color: #f8fafc;
+        background-color: #f0f7ff;
         padding: 1rem;
         border-radius: 8px;
-        border-left: 4px solid #3498db;
+        border-left: 4px solid #1E88E5;
         margin: 1rem 0;
     }
 
@@ -86,92 +123,105 @@ if 'num_subtopics' not in st.session_state:
     st.session_state.num_subtopics = 3
 
 # Title and description
-st.title("🧠 Your AI Research Assistant with ADHD ")
 st.markdown("""
-Ever wished you could clone yourself to research multiple topics at once? Well, this is *almost* as good! 
+<h1 style="text-align: center; color: #0D47A1; margin-bottom: 20px;">🔍 Deep Research Assistant</h1>
+""", unsafe_allow_html=True)
 
-This turbocharged research buddy will:
-1. 🎯 Break down your topic into bite-sized subtopics (because who doesn't love a good outline?)
-2. 🌐 Hunt for information across multiple sources:
-   - 🦆 DuckDuckGo (for when you need the whole web)
-   - 📰 News Search (for the fresh hot takes)
-   - 📚 Wikipedia (for those "actually..." moments)
-3. 🤖 Read and analyze EVERYTHING (so you don't have to)
-4. 🧪 Filter out the fluff (no more cat videos... unless you're researching cats)
-5. ✍️ Write a comprehensive report that would make your professor proud
-6. 📝 Cite all sources (because we're not savages)
+# Introduction in a card-like container
+st.markdown("""
+<div style="background-color: #f0f7ff; padding: 20px; border-radius: 10px; margin-bottom: 30px; border-left: 5px solid #1E88E5;">
 
-Just pick your research sources, set the number of subtopics, and watch as your AI assistant goes down multiple research rabbit holes simultaneously! 🕳️🐇
+<h2 style="color: #1E88E5; margin-top: 0;">Research Automation System</h2>
 
-*Note: No AI assistants were harmed in the making of this research tool, though some did get slightly overwhelmed with excitement!* 
-""")
+This advanced research assistant can help you explore any topic in depth by:
+
+- ✅ Breaking down complex topics into manageable subtopics
+- ✅ Searching multiple sources simultaneously (Web, News, Wikipedia)
+- ✅ Evaluating content quality and relevance automatically
+- ✅ Generating a comprehensive, well-structured research report
+- ✅ Citing all sources for academic integrity
+
+Configure your research parameters in the sidebar and let the AI handle the heavy lifting!
+</div>
+""", unsafe_allow_html=True)
 
 # Sidebar configuration
 with st.sidebar:
-    # Model Status Section
-    st.header("🤖 Model Status")
-    if hasattr(st.session_state, 'ollama_model') and st.session_state.ollama_model:
-        st.success("Model Connected")
-        st.info(f"**Model:** {st.session_state.ollama_model}")
+    # Smaller title with more subtle styling - exactly matching other pages
+    st.markdown("""
+    <h2 style="font-size: 1.5em; color: #0D47A1; margin-bottom: 15px; padding-bottom: 5px; border-bottom: 1px solid #e0e0e0;">
+    ⚙️ Research Settings
+    </h2>
+    """, unsafe_allow_html=True)
+    
+    # Model Status Section - Collapsable
+    with st.expander("🤖 Model Status", expanded=False):
+        if hasattr(st.session_state, 'ollama_model') and st.session_state.ollama_model:
+            st.success("Model Connected")
+            st.info(f"**Model:** {st.session_state.ollama_model}")
+            
+            # Display model parameters in a more organized way
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown("**Parameters:**")
+                st.markdown(f"- Temperature: {st.session_state.temperature}")
+            with col2:
+                st.markdown("**Context:**")
+                st.markdown(f"- Window: {st.session_state.contextWindow}")
+                st.markdown(f"- Max Tokens: {st.session_state.newMaxTokens}")
+        else:
+            st.error("No Model Selected")
+            st.warning("Please select a model in the Model Settings page")
+    
+    # Research Configuration Section - Collapsable
+    with st.expander("📁 Output Configuration", expanded=False):
+        # Output folder configuration with better help text
+        default_output = os.path.join(os.getcwd(), "research_results")
+        output_folder = st.text_input(
+            "Output Location",
+            value=default_output,
+            placeholder="Enter folder path...",
+            help="Specify where to save all research documents and reports"
+        )
+        if not output_folder:
+            st.error("⚠️ Output folder path is required")
+    
+    # Search Provider Configuration - Collapsable
+    with st.expander("🔎 Data Sources", expanded=False):
+        use_duckduckgo = st.checkbox("Web Search (DuckDuckGo)", value=True, 
+                                    help="Search the general web for information")
+        use_duckduckgo_news = st.checkbox("News Search", value=True,
+                                         help="Search recent news articles for timely information")
+        use_wikipedia = st.checkbox("Wikipedia", value=True,
+                                   help="Search Wikipedia for well-established information")
         
-        # Display model parameters
-        st.markdown("**Model Parameters:**")
-        st.markdown(f"- Context Window: {st.session_state.contextWindow}")
-        st.markdown(f"- Temperature: {st.session_state.temperature}")
-        st.markdown(f"- Max Tokens: {st.session_state.newMaxTokens}")
-    else:
-        st.error("No Model Selected")
-        st.warning("Please select a model in the RAG Configuration page")
+        if not any([use_duckduckgo, use_duckduckgo_news, use_wikipedia]):
+            st.warning("⚠️ Please enable at least one search provider")
     
-    st.divider()
-    
-    # Research Configuration Section
-    st.header("🔍 Research Configuration")
-    
-    # Output folder configuration
-    default_output = os.path.join(os.getcwd(), "research_results")
-    output_folder = st.text_input(
-        "Research Output Folder Path",
-        value=default_output,
-        placeholder="Enter the full path to save results...",
-        help="Required: Specify the folder path where research results will be saved"
-    )
-    if not output_folder:
-        st.error("⚠️ Output folder path is required to proceed with research")
-    
-    # Search Provider Configuration
-    st.subheader("Search Providers")
-    use_duckduckgo = st.checkbox("DuckDuckGo Web Search", value=True)
-    use_duckduckgo_news = st.checkbox("DuckDuckGo News Search", value=True)
-    use_wikipedia = st.checkbox("Wikipedia", value=True)
-    
-    if not any([use_duckduckgo, use_duckduckgo_news, use_wikipedia]):
-        st.warning("⚠️ Please enable at least one search provider")
-    
-    st.session_state.max_iterations = st.slider(
-        "Maximum Research Iterations",
-        min_value=1,
-        max_value=20,
-        value=5,
-        help="Maximum number of research cycles to perform"
-    )
+    # Research parameters - Collapsable
+    with st.expander("🔬 Research Depth", expanded=False):
+        st.session_state.max_iterations = st.slider(
+            "Research Iterations",
+            min_value=1,
+            max_value=20,
+            value=5,
+            help="Higher values mean more thorough research but longer processing time"
+        )
 
-    st.session_state.num_subtopics = st.slider(
-        "Number of Subtopics",
-        min_value=1,
-        max_value=20,
-        value=3,
-        help="Number of subtopics to generate"
-    )
+        st.session_state.num_subtopics = st.slider(
+            "Subtopics to Generate",
+            min_value=1,
+            max_value=20,
+            value=3,
+            help="How many subtopics to break down your main topic into"
+        )
     
-    st.divider()
-    
-    # Research Stats (when research is in progress or completed)
+    # Research Stats section when research is active - Collapsable
     if st.session_state.research_in_progress or st.session_state.iteration_count > 0:
-        st.header("📊 Research Stats")
-        st.markdown(f"**Current Iteration:** {st.session_state.iteration_count}")
-        if len(st.session_state.sources) > 0:
-            st.markdown(f"**Sources Found:** {len(st.session_state.sources)}")
+        with st.expander("📊 Research Progress", expanded=False):
+            st.markdown(f"**Current Iteration:** {st.session_state.iteration_count}")
+            if len(st.session_state.sources) > 0:
+                st.markdown(f"**Sources Found:** {len(st.session_state.sources)}")
 
 # Research prompt templates
 SEARCH_QUERY_TEMPLATE = """Generate a search query for web research.
@@ -465,7 +515,7 @@ async def research_subtopic(subtopic, search_tools, synthesis_chain, main_topic,
                     source_type = result['source'].capitalize()
                     status_text.text(f"Evaluating {source_type} content from {result['url']}")
                     evaluation_result = (await evaluation_chain.ainvoke({
-                        "topic": subtopic,
+                        "topic": f"{main_topic} - {subtopic}",
                         "results": result['content']
                     }))["text"]
 
@@ -680,37 +730,67 @@ async def conduct_research(topic):
     finally:
         st.session_state.research_in_progress = False
 
-# Main research interface
+# Main research interface in a card-like container
+st.markdown("""
+<h2 style="color: #1E88E5; margin-top: 0;">Research Topic</h2>
+</div>
+""", unsafe_allow_html=True)
+
 research_topic = st.text_input(
-    "Enter Research Topic",
-    placeholder="Enter any topic you want to research...",
-    disabled=st.session_state.research_in_progress
+    "Enter your research query",
+    placeholder="Enter any topic you want to research in depth...",
+    disabled=st.session_state.research_in_progress,
+    help="Be specific enough to get targeted results, but broad enough to explore the topic"
 )
 
-if st.button("Start Research", disabled=st.session_state.research_in_progress):
-    if not research_topic:
-        st.warning("Please enter a research topic.")
-    elif not hasattr(st.session_state, 'ollama_model') or not st.session_state.ollama_model:
-        st.error("Please select an Ollama model in the RAG Configuration page first.")
-    elif not output_folder:
-        st.error("Please specify an output folder path for saving research results.")
-    else:
-        st.session_state.research_in_progress = True
+col1, col2 = st.columns([3, 1])
+with col1:
+    if st.button(
+        "🚀 Start Research", 
+        disabled=st.session_state.research_in_progress,
+        use_container_width=True,
+        type="primary"
+    ):
+        if not research_topic:
+            st.warning("Please enter a research topic.")
+        elif not hasattr(st.session_state, 'ollama_model') or not st.session_state.ollama_model:
+            st.error("Please select an Ollama model in the Model Settings page first.")
+        elif not output_folder:
+            st.error("Please specify an output folder path for saving research results.")
+        else:
+            st.session_state.research_in_progress = True
+            st.session_state.research_summary = ""
+            st.session_state.sources = []
+            st.session_state.iteration_count = 0
+            asyncio.run(conduct_research(research_topic))
+
+with col2:
+    if st.button(
+        "📋 Clear Results", 
+        disabled=st.session_state.research_in_progress,
+        use_container_width=True
+    ):
         st.session_state.research_summary = ""
         st.session_state.sources = []
         st.session_state.iteration_count = 0
-        asyncio.run(conduct_research(research_topic))
+        st.rerun()
 
 # Display research results
-if st.session_state.research_summary:
-    st.header("Research Results")
+if st.session_state.research_summary:   
+    tabs = st.tabs(["📑 Summary", "🔗 Sources", "📂 Files"])
     
-    with st.expander("View Research Summary", expanded=True):
+    with tabs[0]:
+        st.markdown("""
+        <div class="research-summary">
+        """, unsafe_allow_html=True)
         st.markdown(st.session_state.research_summary)
+        st.markdown("""
+        </div>
+        """, unsafe_allow_html=True)
     
-    if st.session_state.sources:
-        with st.expander("View Sources", expanded=False):
-            st.markdown("### Sources Used")
+    with tabs[1]:
+        if st.session_state.sources:
+            st.markdown("### Sources Used in Research")
             # Filter and display only valid web URLs
             web_sources = [source for source in st.session_state.sources if source.startswith(('http://', 'https://'))]
             if web_sources:
@@ -719,4 +799,28 @@ if st.session_state.research_summary:
                     clean_url = source.strip().rstrip('.')
                     st.markdown(f"{idx}. [{clean_url}]({clean_url})")
             else:
-                st.info("No web sources were found in the search results. This might happen if:\n- The search didn't return any valid URLs\n- The sources weren't properly extracted from the search results\n- The search API is temporarily unavailable") 
+                st.info("No web sources were found in the search results.") 
+        else:
+            st.info("No sources are available for this research.")
+    
+    with tabs[2]:
+        if output_folder and os.path.exists(output_folder):
+            st.markdown("### Research Files")
+            st.markdown(f"All research files are saved to: `{output_folder}`")
+            
+            if os.path.exists(os.path.join(output_folder, sanitize_filename(research_topic))):
+                research_dir = os.path.join(output_folder, sanitize_filename(research_topic))
+                st.success(f"Research directory created: {research_dir}")
+                
+                overview_file = os.path.join(research_dir, "research_overview.md")
+                if os.path.exists(overview_file):
+                    st.download_button(
+                        label="Download Full Research Report",
+                        data=open(overview_file, "r", encoding="utf-8").read(),
+                        file_name=f"{sanitize_filename(research_topic)}_report.md",
+                        mime="text/markdown",
+                    )
+            else:
+                st.warning("Research directory not found. Files may not have been saved properly.")
+        else:
+            st.warning("Output folder not found or not specified.") 

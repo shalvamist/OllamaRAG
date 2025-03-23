@@ -162,7 +162,12 @@ def delete_database(db_name: str) -> tuple[bool, str]:
 
 # Sidebar - Embedding Configuration
 with st.sidebar:
-    st.title("⚙️ RAG Settings")
+    # Smaller title with more subtle styling - exactly matching Model Settings page
+    st.markdown("""
+    <h2 style="font-size: 1.5em; color: #0D47A1; margin-bottom: 15px; padding-bottom: 5px; border-bottom: 1px solid #e0e0e0;">
+    ⚙️ RAG Settings
+    </h2>
+    """, unsafe_allow_html=True)
     
     # Emergency reset button for ChromaDB
     if st.button("🔄 Reset ChromaDB", key="reset_chromadb", help="Emergency reset of ChromaDB client"):
@@ -176,95 +181,94 @@ with st.sidebar:
         except Exception as e:
             st.error(f"Error resetting ChromaDB: {str(e)}")
     
-    # Embedding Model Selection
-    st.header("Embedding Configuration")
+    # Embedding Model Selection - Collapsable
+    with st.expander("🔤 Embedding Model", expanded=False):
+        # Show a clear warning if no embedding model is selected
+        if not st.session_state.embeddingModel:
+            st.warning("⚠️ Please select an embedding model below to enable database updates")
+        
+        # Check if embedding models are available
+        if not st.session_state.dropDown_embeddingModel_list:
+            st.error("No embedding models available!")
+            st.info("""
+            Please pull an embedding model with Ollama. Run this in your terminal:
+            ```
+            ollama pull nomic-embed-text
+            ```
+            or another embedding model like:
+            ```
+            ollama pull all-minilm:embedding
+            ```
+            """
+            )
+            
+            if st.button("🔄 Refresh Models", key="refresh_models"):
+                embedding_models, regular_models = update_ollama_models()
+                st.session_state.dropDown_embeddingModel_list = embedding_models
+                st.session_state.dropDown_model_list = regular_models
+                st.rerun()
+        
+        selected_model = st.selectbox(
+            "Select Embedding Model",
+            st.session_state.dropDown_embeddingModel_list,
+            index=st.session_state.dropDown_embeddingModel_list.index(st.session_state.embeddingModel) if st.session_state.embeddingModel in st.session_state.dropDown_embeddingModel_list else None,
+            placeholder="Select model...",
+            help="Choose the model for generating document embeddings"
+        )
+        if selected_model:
+            st.session_state.embeddingModel = selected_model
+            st.success(f"Selected model: {selected_model}")
     
-    # Show a clear warning if no embedding model is selected
-    if not st.session_state.embeddingModel:
-        st.warning("⚠️ Please select an embedding model below to enable database updates")
-    
-    # Check if embedding models are available
-    if not st.session_state.dropDown_embeddingModel_list:
-        st.error("No embedding models available!")
-        st.info("""
-        Please pull an embedding model with Ollama. Run this in your terminal:
-        ```
-        ollama pull nomic-embed-text
-        ```
-        or another embedding model like:
-        ```
-        ollama pull all-minilm:embedding
-        ```
-        """
+    # Document Processing Settings - Collapsable
+    with st.expander("📄 Document Processing", expanded=False):
+        st.session_state.chunk_size = st.number_input(
+            "Chunk Size",
+            min_value=100,
+            max_value=2000,
+            value=st.session_state.chunk_size,
+            help="Size of text chunks for processing"
         )
         
-        if st.button("🔄 Refresh Models", key="refresh_models"):
-            embedding_models, regular_models = update_ollama_models()
-            st.session_state.dropDown_embeddingModel_list = embedding_models
-            st.session_state.dropDown_model_list = regular_models
-            st.rerun()
-    
-    selected_model = st.selectbox(
-        "Select Embedding Model",
-        st.session_state.dropDown_embeddingModel_list,
-        index=st.session_state.dropDown_embeddingModel_list.index(st.session_state.embeddingModel) if st.session_state.embeddingModel in st.session_state.dropDown_embeddingModel_list else None,
-        placeholder="Select model...",
-        help="Choose the model for generating document embeddings"
-    )
-    if selected_model:
-        st.session_state.embeddingModel = selected_model
-        st.success(f"Selected model: {selected_model}")
-    
-    # Document Processing Settings
-    st.header("Document Processing")
-    st.session_state.chunk_size = st.number_input(
-        "Chunk Size",
-        min_value=100,
-        max_value=2000,
-        value=st.session_state.chunk_size,
-        help="Size of text chunks for processing"
-    )
-    
-    st.session_state.overlap = st.number_input(
-        "Chunk Overlap",
-        min_value=0,
-        max_value=500,
-        value=st.session_state.overlap,
-        help="Number of overlapping tokens between chunks"
-    )
-    
-    st.session_state.dbRetrievalAmount = st.number_input(
-        "Retrieved Documents",
-        min_value=1,
-        max_value=10,
-        value=st.session_state.dbRetrievalAmount,
-        help="Number of documents to retrieve for each query"
-    )
-    
-    # Contextual RAG Settings
-    st.header("Contextual RAG")
-    st.session_state.ContextualRAG = st.checkbox(
-        "Enable Context Generation",
-        value=st.session_state.ContextualRAG,
-        help="Use AI to generate additional context for chunks"
-    )
-    
-    if st.session_state.ContextualRAG:
-        selected_context_model = st.selectbox(
-            "Context Generation Model",
-            st.session_state.dropDown_model_list,
-            index=st.session_state.dropDown_model_list.index(st.session_state.context_model) if st.session_state.context_model in st.session_state.dropDown_model_list else None,
-            placeholder="Select model...",
-            help="Model used for generating context"
+        st.session_state.overlap = st.number_input(
+            "Chunk Overlap",
+            min_value=0,
+            max_value=500,
+            value=st.session_state.overlap,
+            help="Number of overlapping tokens between chunks"
         )
-        if selected_context_model:
-            st.session_state.context_model = selected_context_model
+        
+        st.session_state.dbRetrievalAmount = st.number_input(
+            "Retrieved Documents",
+            min_value=1,
+            max_value=10,
+            value=st.session_state.dbRetrievalAmount,
+            help="Number of documents to retrieve for each query"
+        )
     
-    st.session_state.ContextualBM25RAG = st.checkbox(
-        "Enable BM25 Retrieval",
-        value=st.session_state.ContextualBM25RAG,
-        help="Use BM25 algorithm for document retrieval"
-    )
+    # Contextual RAG Settings - Collapsable
+    with st.expander("🔍 Advanced RAG Options", expanded=False):
+        st.session_state.ContextualRAG = st.checkbox(
+            "Enable Context Generation",
+            value=st.session_state.ContextualRAG,
+            help="Use AI to generate additional context for chunks"
+        )
+        
+        if st.session_state.ContextualRAG:
+            selected_context_model = st.selectbox(
+                "Context Generation Model",
+                st.session_state.dropDown_model_list,
+                index=st.session_state.dropDown_model_list.index(st.session_state.context_model) if st.session_state.context_model in st.session_state.dropDown_model_list else None,
+                placeholder="Select model...",
+                help="Model used for generating context"
+            )
+            if selected_context_model:
+                st.session_state.context_model = selected_context_model
+        
+        st.session_state.ContextualBM25RAG = st.checkbox(
+            "Enable BM25 Retrieval",
+            value=st.session_state.ContextualBM25RAG,
+            help="Use BM25 algorithm for document retrieval"
+        )
 
 # Main content - Database Management
 st.markdown("""

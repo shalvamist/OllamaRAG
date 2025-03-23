@@ -54,189 +54,66 @@ def update_main_ollama_model():
 st.set_page_config(
     page_title="Model Settings - OllamaRAG",
     page_icon="🦙",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
+    layout="wide"
 )
 
-# Custom CSS for cooler color scheme
+# Custom CSS for consistent styling with RAG Config page
 st.markdown("""
 <style>
     /* Main background and text colors */
     .stApp {
-        background-color: #a9b89e;
         color: #1a2234;
-    }
-    
-    /* Main content width and layout */
-    .block-container {
-        max-width: 80% !important;
-        padding: 2rem;
-        background-color: #fff;
-        border-radius: 10px;
-        box-shadow: 0 8px 24px rgba(0,0,0,0.15);
-        margin: 1rem auto;
     }
     
     /* Headers */
     h1 {
-        color: #2c3e50 !important;
+        color: #0D47A1 !important;
         margin-bottom: 1rem !important;
-        margin-top: 1rem !important;
         font-size: 2.2em !important;
-        padding-bottom: 0.5rem !important;
         font-weight: 800 !important;
-        border-bottom: 3px solid #3498db !important;
     }
     
     h2 {
-        color: #2c3e50 !important;
+        color: #1E88E5 !important;
         margin-bottom: 0.8rem !important;
-        margin-top: 0.8rem !important;
         font-size: 1.8em !important;
-        padding-bottom: 0.4rem !important;
         font-weight: 700 !important;
     }
     
-    h3 {
-        color: #2c3e50 !important;
-        margin-bottom: 0.6rem !important;
-        margin-top: 0.6rem !important;
-        font-size: 1.4em !important;
-        padding-bottom: 0.3rem !important;
-        font-weight: 600 !important;
-    }
-    
-    /* Reduce markdown spacing */
-    .stMarkdown {
-        margin-bottom: 0.3rem !important;
+    /* Card styling */
+    [data-testid="stExpander"] {
+        border: none !important;
+        box-shadow: none !important;
     }
     
     /* Buttons */
     .stButton button {
-        background-color: #3498db;
-        color: #fff;
-        border: none;
-        font-weight: bold;
-        padding: 0.4rem 0.8rem;
-        border-radius: 6px;
-        min-height: 40px;
-        margin: 0.3rem 0;
-        font-size: 0.9em;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-    .stButton button:hover {
-        background-color: #2980b9;
-        box-shadow: 0 4px 8px rgba(52, 152, 219, 0.4);
-        transform: translateY(-1px);
+        border-radius: 4px;
     }
     
-    /* Messages */
-    .stSuccess, .stError, .stInfo, .stWarning {
-        padding: 0.5rem;
-        border-radius: 6px;
-        margin: 0.3rem 0;
-        font-size: 0.9em;
+    /* Container borders */
+    [data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlock"] > div[style*="flex-direction: column"] > div[data-testid="stVerticalBlock"] {
+        border-radius: 10px;
+        padding: 1rem;
+    }
+    
+    /* Card headings */
+    .card-heading {
+        color: #555;
+        font-weight: 600;
+        font-size: 0.9rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    /* Success and warning messages */
+    .stSuccess, .stWarning, .stError, .stInfo {
+        border-radius: 4px;
     }
     
     /* Input fields */
-    .stTextInput input, .stNumberInput input, .stTextArea textarea {
-        background-color: #f8fafc;
-        color: #2c3e50;
-        border: 2px solid #3498db;
-        border-radius: 6px;
-        padding: 0.4rem;
-        min-height: 40px;
-        font-size: 0.9em;
-        margin: 0.2rem 0;
-    }
-    .stTextInput input:focus, .stNumberInput input:focus, .stTextArea textarea:focus {
-        border-color: #2980b9;
-        box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
-        transform: translateY(-1px);
-        background-color: #fff;
-    }
-    
-    /* Selectbox */
-    .stSelectbox select {
-        background-color: #f8fafc;
-        color: #2c3e50;
-        border: 2px solid #3498db;
-        border-radius: 6px;
-        padding: 0.4rem;
-        min-height: 40px;
-        font-size: 0.9em;
-        margin: 0.2rem 0;
-    }
-    .stSelectbox select:hover {
-        border-color: #2980b9;
-        transform: translateY(-1px);
-        box-shadow: 0 4px 8px rgba(52, 152, 219, 0.2);
-    }
-    
-    /* Checkbox */
-    .stCheckbox {
-        margin: 0.2rem 0;
-    }
-    .stCheckbox label {
-        color: #2c3e50 !important;
-        font-weight: 600;
-        font-size: 0.9em;
-        padding: 0.2rem 0;
-    }
-    
-    /* Slider */
-    .stSlider {
-        color: #2c3e50;
-        padding: 0.8rem 0;
-    }
-    .stSlider [data-baseweb="slider"] {
-        margin-top: 0.8rem;
-    }
-    .stSlider [data-baseweb="thumb"] {
-        background-color: #3498db;
-        border: 2px solid #fff;
-        box-shadow: 0 2px 4px rgba(52, 152, 219, 0.3);
-        width: 20px;
-        height: 20px;
-    }
-    .stSlider [data-baseweb="track"] {
-        background-color: #bdc3c7;
-        height: 6px;
-    }
-    .stSlider [data-baseweb="track-fill"] {
-        background-color: #3498db;
-    }
-    
-    /* Divider */
-    hr {
-        margin: 0.8rem 0;
-        border-width: 1px;
-    }
-
-    /* Section spacing */
-    .element-container {
-        margin-bottom: 0.5rem !important;
-    }
-
-    /* Column gaps */
-    .row-widget {
-        gap: 0.5rem !important;
-    }
-
-    /* Labels and help text */
-    .stTextInput label, .stNumberInput label, .stSelectbox label, .stTextArea label {
-        color: #2c3e50;
-        font-weight: 700;
-        font-size: 0.9rem;
-        margin-bottom: 0.2rem;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-    .stTextInput .help-text, .stNumberInput .help-text, .stSelectbox .help-text, .stTextArea .help-text {
-        color: #666;
-        font-size: 0.8rem;
-        margin-top: 0.1rem;
-        font-style: italic;
+    .stTextInput input, .stNumberInput input, .stTextArea textarea, .stSelectbox select {
+        border-radius: 4px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -265,98 +142,186 @@ update_ollama_model()
 
 # Sidebar - Model Status
 with st.sidebar:
-    st.header("🔄 Model Status")
-    if st.button('Check Loaded Models', key='check_models'):
-        has_loaded_models = check_loaded_models()
-        if has_loaded_models:
-            st.success(f"Currently loaded models: {', '.join(st.session_state.loaded_model_list)}")
-        else:
-            st.info("No models currently running")
+    # Smaller title with more subtle styling
+    st.markdown("""
+    <h2 style="font-size: 1.5em; color: #0D47A1; margin-bottom: 15px; padding-bottom: 5px; border-bottom: 1px solid #e0e0e0;">
+    ⚙️ Model Settings
+    </h2>
+    """, unsafe_allow_html=True)
     
-    # Show current model status
-    st.divider()
-    if st.session_state.chatReady and st.session_state.ollama_model:
-        st.success(f"Active Model: {st.session_state.ollama_model}")
-    else:
-        st.warning("No model currently active")
+    # Emergency reset button for Ollama
+    if st.button("🔄 Reset Ollama", key="reset_ollama", help="Emergency reset of Ollama connection"):
+        try:
+            update_ollama_model()
+            st.success("Ollama connection refreshed successfully!")
+            st.rerun()
+        except Exception as e:
+            st.error(f"Error resetting Ollama connection: {str(e)}")
+    
+    # Status and loaded models in a collapsable section
+    with st.expander("🤖 Model Status", expanded=False):
+        # Show current status
+        if st.session_state.chatReady and st.session_state.ollama_model:
+            st.success(f"✅ {st.session_state.ollama_model} (Active)")
+        else:
+            st.warning("⚠️ No model active")
+        
+        # Check loaded models button
+        if st.button('🔄 Check Loaded Models', key='check_models', use_container_width=True):
+            with st.spinner("Checking running models..."):
+                has_loaded_models = check_loaded_models()
+                if has_loaded_models:
+                    st.success(f"Running: {', '.join(st.session_state.loaded_model_list)}")
+                else:
+                    st.info("No models currently running")
+    
+    # Add Quick Actions section
+    with st.expander("⚡ Quick Actions", expanded=False):
+        if st.session_state.ollama_model:
+            st.markdown(f"**Selected Model:** {st.session_state.ollama_model}")
+            
+            # Apply settings button in sidebar for quick access
+            if st.button(
+                "✅ Apply Current Settings",
+                key='apply_settings_sidebar',
+                type="primary",
+                use_container_width=True
+            ):
+                with st.spinner(f"Applying settings to {st.session_state.ollama_model}..."):
+                    update_main_ollama_model()
+        else:
+            st.info("Select a model in the main panel")
+            st.button(
+                "Apply Settings",
+                key='apply_settings_sidebar',
+                disabled=True,
+                use_container_width=True
+            )
 
 # Main content
-st.title("🦙 Ollama Model Settings")
-
 st.markdown("""
-Configure your Ollama model settings here. These settings will affect how the model processes your queries and generates responses.
-""")
+<h1 style="text-align: center; color: #0D47A1; margin-bottom: 20px;">🦙 Ollama Model Settings</h1>
+""", unsafe_allow_html=True)
 
-# Model Selection
-st.header("Model Selection")
-selected_model = st.selectbox(
-    "Select an Ollama model",
-    st.session_state.dropDown_model_list,
-    index=st.session_state.dropDown_model_list.index(st.session_state.ollama_model) if st.session_state.ollama_model in st.session_state.dropDown_model_list else None,
-    placeholder="Select model...",
-    help="Choose the main model for chat interactions"
-)
-if selected_model:
-    st.session_state.ollama_model = selected_model
+# Main content - using tabs for a more compact layout
+tab1, tab2, tab3 = st.tabs(["📋 Model Selection", "⚙️ Parameters", "⬇️ Installation"])
 
-# Model Installation
-st.header("Model Installation")
-ollama_model_pull = st.text_input(
-    "Install new Ollama model",
-    placeholder="Enter model name (e.g., llama2)",
-    help="Enter the name of a model to download from Ollama's model library"
-)
+# Tab 1: Model Selection
+with tab1:
+    st.subheader("Select Model")
+    
+    if not st.session_state.dropDown_model_list:
+        st.warning("⚠️ No models available. Please install models first.")
+    else:
+        selected_model = st.selectbox(
+            "Select an Ollama model",
+            st.session_state.dropDown_model_list,
+            index=st.session_state.dropDown_model_list.index(st.session_state.ollama_model) if st.session_state.ollama_model in st.session_state.dropDown_model_list else None,
+            placeholder="Select model...",
+            help="Choose the main model for chat interactions"
+        )
+        if selected_model:
+            st.session_state.ollama_model = selected_model
+    
+    # Apply Settings Button - moved here for better workflow
+    st.divider()
+    
+    # Check if a model is selected
+    if not st.session_state.ollama_model:
+        st.warning("⚠️ Please select a model first")
+        apply_button_enabled = False
+    else:
+        apply_button_enabled = True
+        st.info(f"Current model: {st.session_state.ollama_model}")
+    
+    if st.button(
+        "✅ Apply Settings",
+        key='apply_settings',
+        disabled=not apply_button_enabled,
+        type="primary",
+        use_container_width=True
+    ):
+        with st.spinner(f"Applying settings to {st.session_state.ollama_model}..."):
+            update_main_ollama_model()
 
-if ollama_model_pull:
-    with st.spinner(f"Downloading {ollama_model_pull}..."):
-        try:
-            ollama.pull(ollama_model_pull)
-            update_ollama_model()
-            st.success(f"Successfully downloaded {ollama_model_pull}")
-        except Exception as e:
-            st.error(f"Error downloading model: {str(e)}")
+# Tab 2: Parameters
+with tab2:
+    st.subheader("Model Parameters")
+    
+    # Two columns for window and max tokens
+    col1, col2 = st.columns(2)
+    with col1:
+        context_window = st.number_input(
+            "Context Window Size",
+            min_value=512,
+            max_value=8192,
+            value=st.session_state.contextWindow,
+            help="Maximum number of tokens the model can process at once"
+        )
+        st.session_state.contextWindow = context_window
 
-# Model Parameters
-st.header("Model Parameters")
-
-col1, col2 = st.columns(2)
-with col1:
-    context_window = st.number_input(
-        "Context Window Size",
-        min_value=512,
-        max_value=8192,
-        value=st.session_state.contextWindow,
-        help="Maximum number of tokens the model can process at once"
+    with col2:
+        max_tokens = st.number_input(
+            "Maximum New Tokens",
+            min_value=64,
+            max_value=4096,
+            value=st.session_state.newMaxTokens,
+            help="Maximum number of tokens the model can generate in response"
+        )
+        st.session_state.newMaxTokens = max_tokens
+    
+    # Temperature slider
+    temperature = st.slider(
+        "Temperature",
+        min_value=0.0,
+        max_value=2.0,
+        value=st.session_state.temperature,
+        step=0.01,
+        help="Controls randomness in the output (0 = deterministic, 2 = very random)"
     )
-    st.session_state.contextWindow = context_window
-
-with col2:
-    max_tokens = st.number_input(
-        "Maximum New Tokens",
-        min_value=64,
-        max_value=4096,
-        value=st.session_state.newMaxTokens,
-        help="Maximum number of tokens the model can generate in response"
+    st.session_state.temperature = temperature
+    
+    # System prompt
+    system_prompt = st.text_area(
+        "System Prompt",
+        value=st.session_state.system_prompt,
+        help="Sets the behavior and role of the assistant",
+        height=100
     )
-    st.session_state.newMaxTokens = max_tokens
+    st.session_state.system_prompt = system_prompt
 
-temperature = st.slider(
-    "Temperature",
-    min_value=0.0,
-    max_value=2.0,
-    value=st.session_state.temperature,
-    step=0.01,
-    help="Controls randomness in the output (0 = deterministic, 2 = very random)"
-)
-st.session_state.temperature = temperature
+# Tab 3: Installation
+with tab3:
+    st.subheader("Install New Model")
+    
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        ollama_model_pull = st.text_input(
+            "Model Name",
+            placeholder="Enter model name (e.g., llama2)",
+            help="Enter the name of a model to download from Ollama's model library"
+        )
+    
+    with col2:
+        pull_button = st.button(
+            "📥 Install",
+            key="pull_model",
+            disabled=not ollama_model_pull,
+            type="primary",
+            use_container_width=True
+        )
+    
+    if pull_button and ollama_model_pull:
+        with st.spinner(f"Downloading {ollama_model_pull}..."):
+            try:
+                ollama.pull(ollama_model_pull)
+                update_ollama_model()
+                st.success(f"Successfully downloaded {ollama_model_pull}")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error downloading model: {str(e)}")
 
-system_prompt = st.text_area(
-    "System Prompt",
-    value=st.session_state.system_prompt,
-    help="Sets the behavior and role of the assistant"
-)
-st.session_state.system_prompt = system_prompt
-
-# Apply Settings Button
-if st.button("Apply Settings", key='apply_settings'):
-    update_main_ollama_model() 
+    # Show available models
+    if st.session_state.dropDown_model_list:
+        with st.expander("Available Models"):
+            st.write(", ".join(st.session_state.dropDown_model_list)) 

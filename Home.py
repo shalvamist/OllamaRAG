@@ -76,135 +76,80 @@ st.set_page_config(
     layout="wide"
 )
 
-# Custom CSS for styling
+# Custom CSS styling
 st.markdown("""
 <style>
     /* Main background and text colors */
     .stApp {
-        background-color: #a9b89e;
         color: #1a2234;
-    }
-    
-    /* Main content width and layout */
-    .block-container {
-        max-width: 80% !important;
-        padding: 2rem;
-        background-color: #fff;
-        border-radius: 10px;
-        box-shadow: 0 8px 24px rgba(0,0,0,0.15);
-        margin: 1rem auto;
     }
     
     /* Headers */
     h1 {
-        color: #2c3e50 !important;
+        color: #0D47A1 !important;
         margin-bottom: 1rem !important;
-        margin-top: 1rem !important;
         font-size: 2.2em !important;
-        padding-bottom: 0.5rem !important;
         font-weight: 800 !important;
-        border-bottom: 3px solid #3498db !important;
     }
     
     h2 {
-        color: #2c3e50 !important;
+        color: #1E88E5 !important;
         margin-bottom: 0.8rem !important;
-        margin-top: 0.8rem !important;
         font-size: 1.8em !important;
-        padding-bottom: 0.4rem !important;
         font-weight: 700 !important;
     }
     
     h3 {
-        color: #2c3e50 !important;
+        color: #1976D2 !important;
         margin-bottom: 0.6rem !important;
-        margin-top: 0.6rem !important;
         font-size: 1.4em !important;
-        padding-bottom: 0.3rem !important;
         font-weight: 600 !important;
     }
     
-    /* Reduce markdown spacing */
-    .stMarkdown {
-        margin-bottom: 0.3rem !important;
+    /* Card styling */
+    [data-testid="stExpander"] {
+        border: none !important;
+        box-shadow: none !important;
     }
     
     /* Buttons */
     .stButton button {
-        background-color: #3498db;
-        color: #fff;
-        border: none;
-        font-weight: bold;
-        padding: 0.4rem 0.8rem;
-        border-radius: 6px;
-        min-height: 40px;
-        margin: 0.3rem 0;
-        font-size: 0.9em;
+        border-radius: 4px;
     }
     
-    /* Messages */
-    .stSuccess, .stError, .stInfo, .stWarning {
-        padding: 0.5rem;
-        border-radius: 6px;
-        margin: 0.3rem 0;
-        font-size: 0.9em;
+    /* Container borders */
+    [data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlock"] > div[style*="flex-direction: column"] > div[data-testid="stVerticalBlock"] {
+        border-radius: 10px;
+        padding: 1rem;
+    }
+    
+    /* Success and warning messages */
+    .stSuccess, .stWarning, .stError, .stInfo {
+        border-radius: 4px;
     }
     
     /* Input fields */
-    .stTextInput input, .stNumberInput input, .stTextArea textarea {
-        background-color: #f8fafc;
-        color: #2c3e50;
-        border: 2px solid #3498db;
-        border-radius: 6px;
-        padding: 0.4rem;
-        min-height: 40px;
-        font-size: 0.9em;
-        margin: 0.2rem 0;
+    .stTextInput input, .stNumberInput input, .stTextArea textarea, .stSelectbox select {
+        border-radius: 4px;
     }
     
-    /* Selectbox */
-    .stSelectbox select {
-        background-color: #f8fafc;
-        color: #2c3e50;
-        border: 2px solid #3498db;
-        border-radius: 6px;
-        padding: 0.4rem;
-        min-height: 40px;
-        font-size: 0.9em;
-        margin: 0.2rem 0;
+    /* Feature card styling */
+    .feature-card {
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        border-left: 4px solid #1E88E5;
+        padding: 15px;
+        margin-bottom: 15px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
     }
     
-    /* Checkbox */
-    .stCheckbox {
-        margin: 0.2rem 0;
-    }
-    .stCheckbox label {
-        color: #2c3e50 !important;
-        font-size: 0.9em;
-        padding: 0.2rem 0;
-    }
-    
-    /* Divider */
-    hr {
-        margin: 0.8rem 0;
-        border-width: 1px;
-    }
-
-    /* Section spacing */
-    .element-container {
-        margin-bottom: 0.5rem !important;
-    }
-
-    /* Column gaps */
-    .row-widget {
-        gap: 0.5rem !important;
-    }
-
-    /* Help text */
-    .stTextInput .help-text, .stNumberInput .help-text, .stSelectbox .help-text {
-        font-size: 0.8em;
-        margin-top: 0.1rem;
-        color: #666;
+    /* Status indicators */
+    .status-card {
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 15px;
+        background-color: #f8f9fa;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
     }
 </style>
 """, unsafe_allow_html=True)
@@ -213,151 +158,217 @@ st.markdown("""
 initApp()
 
 # Main page content
-st.title("🦙🦜🔗 OllamaRAG 🔗🦜🦙")
-
 st.markdown("""
-## Welcome to OllamaRAG! 👋
+<h1 style="text-align: center; color: #0D47A1; margin-bottom: 20px;">
+    🦙 OllamaRAG - Local LLM Assistant
+</h1>
+""", unsafe_allow_html=True)
 
-OllamaRAG is a powerful tool that combines the capabilities of Ollama's local LLMs with RAG (Retrieval-Augmented Generation) for enhanced conversational AI and deep research capabilities.
+# Introduction section with blue card styling
+st.markdown("""
+<div style="background-color: #f0f7ff; padding: 20px; border-radius: 10px; margin-bottom: 30px; border-left: 5px solid #1E88E5;">
+<h2 style="color: #1E88E5; margin-top: 0;">Welcome to OllamaRAG</h2>
 
-### What is OllamaRAG?
-OllamaRAG is an advanced platform that leverages local Language Models (LLMs) through Ollama and enhances them with RAG capabilities and comprehensive research tools. This combination allows for more accurate and contextually relevant responses based on your documents and web research.
+A powerful platform that combines Ollama's local LLMs with advanced Retrieval-Augmented Generation (RAG), 
+deep research capabilities, and debate tools - all running locally on your machine.
 
-### Key Features:
-- 🤖 **Local LLM Support**: Run AI models locally on your machine
-- 📚 **RAG Integration**: Enhance responses with relevant document context
-- 🎯 **Contextual Retrieval**: Smart document chunk retrieval for better context
-- 📊 **BM25 Search**: Advanced search algorithm for improved document matching
-- 🔍 **Deep Research**: Comprehensive web research capabilities
-- 🌐 **DuckDuckGo Search**: Privacy-focused web search integration
-- 🔄 **Flexible Configuration**: Customize model and RAG parameters
-""")
+- 🔒 **Privacy-focused**: All processing happens on your device
+- 🚀 **No API costs**: Use your own local models without subscription fees
+- 🔍 **Enhanced context**: RAG technology for more accurate responses
+- 📚 **Document intelligence**: Process your documents for better answers
+- 🔎 **Research capabilities**: Automated deep research across multiple sources
+- 🗣️ **Debate simulation**: Generate balanced perspectives on any topic
+</div>
+""", unsafe_allow_html=True)
 
-# Quick Start Guide
-st.header("🚀 Quick Start Guide")
+# Features section in a grid layout
+st.markdown('<h2 style="color: #1E88E5;">Main Features</h2>', unsafe_allow_html=True)
 
-col1, col2, col3, col4 = st.columns(4)
+col1, col2 = st.columns(2)
 
 with col1:
     st.markdown("""
-    ### 1️⃣ Model Setup
+    <div class="feature-card">
+        <h3 style="color: #1E88E5; margin-top: 0;">🦙 Model Settings</h3>
+        <p>Configure and manage your Ollama models:</p>
+        <ul>
+            <li>Select from locally installed models</li>
+            <li>Configure temperature and token settings</li>
+            <li>Customize context window size</li>
+            <li>Define system prompts for specialized assistants</li>
+        </ul>
+        <a href="./🦙_Model_Settings">Configure your models →</a>
+    </div>
+    """, unsafe_allow_html=True)
     
-    Go to **🦙 Model Settings** to:
-    - Select your Ollama model
-    - Configure model parameters
-    - Set system prompt
-    - Apply your settings
-    """)
+    st.markdown("""
+    <div class="feature-card">
+        <h3 style="color: #1E88E5; margin-top: 0;">💬 Chat Interface</h3>
+        <p>Interact with your models in a modern chat interface:</p>
+        <ul>
+            <li>Chat with context from your documents</li>
+            <li>Access knowledge from your document database</li>
+            <li>Save and load conversations</li>
+            <li>Clear conversation history when needed</li>
+        </ul>
+        <a href="./💬_Chat">Start chatting →</a>
+    </div>
+    """, unsafe_allow_html=True)
 
 with col2:
     st.markdown("""
-    ### 2️⃣ RAG Configuration
+    <div class="feature-card">
+        <h3 style="color: #1E88E5; margin-top: 0;">🔗 RAG Configuration</h3>
+        <p>Set up your Retrieval-Augmented Generation system:</p>
+        <ul>
+            <li>Upload and process documents (PDF, DOCX, TXT)</li>
+            <li>Configure embedding models for semantic search</li>
+            <li>Customize document chunking parameters</li>
+            <li>Enable contextual processing for better retrieval</li>
+        </ul>
+        <a href="./🔗_RAG_Config">Configure RAG →</a>
+    </div>
+    """, unsafe_allow_html=True)
     
-    Visit **🔗 RAG Config** to:
-    - Upload your documents
-    - Configure chunk settings
-    - Set up embeddings
-    - Initialize the database
-    """)
-
-with col3:
     st.markdown("""
-    ### 3️⃣ Deep Research
-    
-    Use **🔍 Deep Research** to:
-    - Perform web research
-    - Choose search providers
-    - Configure API keys
-    - Get comprehensive reports
-    """)
+    <div class="feature-card">
+        <h3 style="color: #1E88E5; margin-top: 0;">🔍 Deep Research</h3>
+        <p>Perform comprehensive research on any topic:</p>
+        <ul>
+            <li>Break down topics into logical subtopics</li>
+            <li>Search across multiple sources (Web, News, Wikipedia)</li>
+            <li>Generate well-structured research reports</li>
+            <li>Track research progress and sources</li>
+        </ul>
+        <a href="./🔍_DeepResearch">Start researching →</a>
+    </div>
+    """, unsafe_allow_html=True)
 
-with col4:
+# Advanced Features Section
+st.markdown('<h2 style="color: #1E88E5; margin-top: 30px;">Advanced Capabilities</h2>', unsafe_allow_html=True)
+
+col1, col2 = st.columns(2)
+
+with col1:
     st.markdown("""
-    ### 4️⃣ Chat Interface
-    
-    Access **💬 Chat** to:
-    - Interact with the model
-    - Use RAG capabilities
-    - Reference documents
-    - Get informed responses
-    """)
+    <div class="feature-card">
+        <h3 style="color: #1E88E5; margin-top: 0;">🗣️ Debate Simulation</h3>
+        <p>Generate balanced perspectives on any topic:</p>
+        <ul>
+            <li>Configure two AI debaters with different viewpoints</li>
+            <li>Set a neutral AI judge to evaluate arguments</li>
+            <li>Customize debate parameters and depth</li>
+            <li>Explore complex topics from multiple angles</li>
+        </ul>
+        <a href="./🗣️_Debate">Start a debate →</a>
+    </div>
+    """, unsafe_allow_html=True)
 
-st.divider()
-
-# Feature Highlights
-st.header("✨ Feature Highlights")
-
-# Deep Research Section
-st.subheader("🔍 Advanced Deep Research")
-st.markdown("""
-Our Deep Research feature provides comprehensive web research capabilities:
-
-- **Multiple Search Providers**:
-  - 🦆 DuckDuckGo: No API key required
-  - 🔍 Google: Custom Search API integration
-  - 🦁 Brave Search: Advanced search capabilities
-  
-- **Research Process**:
-  1. Intelligent query generation
-  2. Multi-source information gathering
-  3. Comprehensive synthesis
-  4. Automatic source citation
-  5. Iterative gap analysis
-
-- **Research Output**:
-  - Structured research summaries
-  - Key findings and analysis
-  - Verified source citations
-  - Knowledge gap identification
-""")
-
-# RAG Capabilities Section
-st.subheader("🔗 Enhanced RAG Capabilities")
+with col2:
+    st.markdown("""
+    <div class="feature-card">
+        <h3 style="color: #1E88E5; margin-top: 0;">⚙️ RAG Technology</h3>
+        <p>Advanced Retrieval-Augmented Generation features:</p>
+        <ul>
+            <li>Context-aware document retrieval</li>
+            <li>BM25 + semantic hybrid search options</li>
+            <li>Custom chunking strategies for different document types</li>
+            <li>Iterative context generation for complex queries</li>
+        </ul>
+    </div>
+    """, unsafe_allow_html=True)
 
 # System Status
-st.header("📊 System Status")
+st.markdown('<h2 style="color: #1E88E5; margin-top: 30px;">System Status</h2>', unsafe_allow_html=True)
 
 col1, col2, col3 = st.columns(3)
 
 with col1:
     if st.session_state.chatReady and st.session_state.ollama_model:
-        st.success(f"Model: {st.session_state.ollama_model}")
+        st.markdown("""
+        <div class="status-card" style="border-left: 4px solid #4CAF50;">
+            <h3 style="color: #4CAF50; margin-top: 0; font-size: 1.2em;">✅ Model Connected</h3>
+            <p><strong>Active Model:</strong> {}</p>
+            <p><strong>Temperature:</strong> {}</p>
+            <p><strong>Max Tokens:</strong> {}</p>
+        </div>
+        """.format(
+            st.session_state.ollama_model,
+            st.session_state.temperature,
+            st.session_state.newMaxTokens
+        ), unsafe_allow_html=True)
     else:
-        st.error("Model: Not Configured")
+        st.markdown("""
+        <div class="status-card" style="border-left: 4px solid #F44336;">
+            <h3 style="color: #F44336; margin-top: 0; font-size: 1.2em;">❌ No Model Connected</h3>
+            <p>Please visit the Model Settings page to select and configure an Ollama model.</p>
+            <a href="./🦙_Model_Settings">Configure model →</a>
+        </div>
+        """, unsafe_allow_html=True)
 
 with col2:
     if st.session_state.db_ready:
-        st.success("RAG Database: Ready")
+        st.markdown("""
+        <div class="status-card" style="border-left: 4px solid #4CAF50;">
+            <h3 style="color: #4CAF50; margin-top: 0; font-size: 1.2em;">✅ RAG System Ready</h3>
+            <p><strong>Embedding Model:</strong> {}</p>
+            <p><strong>Chunk Size:</strong> {}</p>
+            <p><strong>Retrieved Docs:</strong> {}</p>
+        </div>
+        """.format(
+            st.session_state.embeddingModel,
+            st.session_state.chunk_size,
+            st.session_state.dbRetrievalAmount
+        ), unsafe_allow_html=True)
     else:
-        st.warning("RAG Database: Not Configured")
+        st.markdown("""
+        <div class="status-card" style="border-left: 4px solid #FF9800;">
+            <h3 style="color: #FF9800; margin-top: 0; font-size: 1.2em;">⚠️ RAG Not Configured</h3>
+            <p>Visit the RAG Configuration page to set up your document database.</p>
+            <a href="./🔗_RAG_Config">Configure RAG →</a>
+        </div>
+        """, unsafe_allow_html=True)
 
 with col3:
     if len(st.session_state.docs) > 0:
-        st.info(f"Documents Loaded: {len(st.session_state.docs)}")
+        st.markdown("""
+        <div class="status-card" style="border-left: 4px solid #2196F3;">
+            <h3 style="color: #2196F3; margin-top: 0; font-size: 1.2em;">ℹ️ Documents Loaded</h3>
+            <p><strong>Document Count:</strong> {}</p>
+            <p>Your documents have been processed and are ready for use with RAG.</p>
+        </div>
+        """.format(len(st.session_state.docs)), unsafe_allow_html=True)
     else:
-        st.warning("No Documents Loaded")
+        st.markdown("""
+        <div class="status-card" style="border-left: 4px solid #9E9E9E;">
+            <h3 style="color: #9E9E9E; margin-top: 0; font-size: 1.2em;">📄 No Documents</h3>
+            <p>Upload documents in the RAG Configuration page to enable document-based context.</p>
+            <a href="./🔗_RAG_Config">Upload documents →</a>
+        </div>
+        """, unsafe_allow_html=True)
 
-# Additional Information
-st.header("ℹ️ Additional Information")
+# Quick Start Guide
+st.markdown('<h2 style="color: #1E88E5; margin-top: 30px;">Getting Started</h2>', unsafe_allow_html=True)
 
 st.markdown("""
-### About RAG
-Retrieval-Augmented Generation (RAG) is a technique that enhances Large Language Models by providing them with relevant context from your documents. This results in:
-- More accurate responses
-- Better factual grounding
-- Reduced hallucinations
-- Domain-specific knowledge
+<div style="background-color: #f0f7ff; padding: 20px; border-radius: 10px; margin-bottom: 20px;">
+<h3 style="color: #1E88E5; margin-top: 0;">📚 Quick Start Guide</h3>
 
-### About Ollama
-Ollama is a framework for running large language models locally. Benefits include:
-- Privacy and security
-- No API costs
-- Customizable models
-- Local processing
+<ol>
+    <li><strong>Set up a model</strong> - First, visit the Model Settings page to select and configure your Ollama model</li>
+    <li><strong>Configure RAG</strong> - Upload documents and set up your embedding model in the RAG Configuration page</li>
+    <li><strong>Start chatting</strong> - Use the Chat interface to interact with your model with document context</li>
+    <li><strong>Try advanced features</strong> - Explore Deep Research or Debate simulation capabilities</li>
+</ol>
 
-### Tips for Best Results
-1. Choose the right model for your needs
-2. Configure appropriate chunk sizes for your documents
-3. Experiment with retrieval settings
-4. Use specific questions for better context retrieval
-""") 
+<p><strong>Need Help?</strong> Each page includes detailed instructions and tooltips to guide you through the process.</p>
+</div>
+""", unsafe_allow_html=True)
+
+# Footer
+st.markdown("""
+<div style="margin-top: 50px; text-align: center; color: #666; font-size: 0.9em;">
+<p>OllamaRAG runs entirely on your local machine. No data is sent to external servers.</p>
+<p>For more information, visit the <a href="https://github.com/ollama/ollama" target="_blank">Ollama GitHub page</a>.</p>
+</div>
+""", unsafe_allow_html=True) 
