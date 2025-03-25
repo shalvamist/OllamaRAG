@@ -16,7 +16,7 @@ import shutil  # Added for directory operations
 from urllib.parse import urlparse
 from bs4 import SoupStrainer
 
-# Import utility functions
+# Import utility functions from CommonUtils
 from CommonUtils.research_utils import (
     sanitize_filename,
     create_research_directory,
@@ -30,6 +30,10 @@ from CommonUtils.research_utils import (
     FINAL_SYNTHESIS_TEMPLATE,
     SEARCH_RESULTS_EVALUATION_TEMPLATE
 )
+
+# Import necessary RAG utilities
+from CommonUtils.rag_utils import SOURCE_PATH, get_client
+import pypandoc
 
 # Set page config
 st.set_page_config(
@@ -137,6 +141,18 @@ if 'output_folder' not in st.session_state:
     st.session_state.output_folder = os.path.join(os.getcwd(), "research_results")
 if 'current_research_topic' not in st.session_state:
     st.session_state.current_research_topic = ""
+
+# Initialize RAG parameters if not present
+if 'chunk_size' not in st.session_state:
+    st.session_state.chunk_size = 1000
+if 'overlap' not in st.session_state:
+    st.session_state.overlap = 200
+if 'chroma_client' not in st.session_state:
+    st.session_state.chroma_client = get_client()
+if 'databases' not in st.session_state:
+    st.session_state.databases = {}
+if 'available_databases' not in st.session_state:
+    st.session_state.available_databases = []
 
 # Title and description
 st.markdown("""
@@ -325,6 +341,223 @@ def clear_research_folder():
             st.error(f"Error clearing research folder: {str(e)}")
     else:
         st.error("Research folder does not exist or is not specified.")
+
+# Function to create a RAG DB from research files
+async def create_rag_db_from_research(research_dir, topic_name, progress_container, status_container):
+    """
+    Creates a RAG database from research files.
+    
+    Args:
+        research_dir: Path to the research directory
+        topic_name: Name of the research topic (used as DB name)
+        progress_container: Streamlit container for progress bar
+        status_container: Streamlit container for status messages
+    
+    Returns:
+        tuple[bool, str]: Success status and message
+    """
+    from CommonUtils.rag_utils import SOURCE_PATH, add_document_to_db, update_db, get_client
+    import tempfile
+    
+    # Check for conversion dependencies
+    use_pdf_conversion = True
+    conversion_warning = ""
+    
+    # Create progress trackers
+    progress_bar = progress_container.progress(0)
+    
+    def update_status(message, progress=None):
+        """Update status message and progress bar"""
+        status_container.info(message)
+        if progress is not None:
+            progress_bar.progress(progress)
+
+    # Check for wkhtmltopdf only if we're using pypandoc
+    if use_pdf_conversion:
+        try:
+            import subprocess
+            subprocess.run(['wkhtmltopdf', '-V'], capture_output=True, check=True)
+        except (subprocess.SubprocessError, FileNotFoundError):
+            use_pdf_conversion = False
+            conversion_warning = "wkhtmltopdf not found - using direct markdown files instead of PDF conversion."
+    
+    try:
+        # Sanitize topic name for DB name
+        db_name = sanitize_filename(topic_name)
+        
+        # Check if a database with this name already exists
+        if os.path.exists(os.path.join(SOURCE_PATH, db_name)):
+            return False, f"A RAG database named '{db_name}' already exists. Please delete it first."
+        
+        update_status("Step 1/3: Creating database directory...", 0.1)
+        
+        # Step 1: Create the database directory
+        db_path = os.path.join(SOURCE_PATH, db_name)
+        os.makedirs(db_path, exist_ok=True)
+        
+        # Find all markdown files in the research directory and subdirectories
+        all_md_files = []
+        for root, dirs, files in os.walk(research_dir):
+            for file in files:
+                if file.endswith('.md'):
+                    all_md_files.append(os.path.join(root, file))
+        
+        if not all_md_files:
+            return False, "No markdown files found in the research directory."
+        
+        # If we have conversion warnings, show them
+        if conversion_warning:
+            status_container.warning(conversion_warning)
+        
+        update_status(f"Step 2/3: Converting {len(all_md_files)} research files...", 0.2)
+        
+        # Process each markdown file
+        for idx, md_file in enumerate(all_md_files):
+            # Update progress based on file index
+            current_progress = 0.2 + (0.3 * (idx / len(all_md_files)))
+            progress_bar.progress(current_progress)
+            
+            try:
+                if use_pdf_conversion:
+                    # PDF conversion path
+                    # Create a temporary PDF file
+                    with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as temp_pdf:
+                        temp_pdf_path = temp_pdf.name
+                    
+                    # Update status with current file
+                    file_name = os.path.basename(md_file)
+                    update_status(f"Converting file {idx+1}/{len(all_md_files)}: {file_name}")
+                    
+                    # Convert markdown to PDF using pypandoc
+                    pypandoc.convert_file(
+                        md_file, 
+                        'pdf', 
+                        outputfile=temp_pdf_path,
+                        extra_args=[
+                            '--pdf-engine=wkhtmltopdf',
+                            '-V', 'geometry:margin=1in'
+                        ]
+                    )
+                    
+                    # Read the PDF file
+                    with open(temp_pdf_path, 'rb') as f:
+                        file_content = f.read()
+                    
+                    # Get relative filename for the PDF
+                    rel_filename = os.path.basename(md_file).replace('.md', '.pdf')
+                    
+                    # Clean up temporary file
+                    os.unlink(temp_pdf_path)
+                else:
+                    # Direct markdown file path - read the markdown file directly
+                    file_name = os.path.basename(md_file)
+                    update_status(f"Processing file {idx+1}/{len(all_md_files)}: {file_name}")
+                    
+                    with open(md_file, 'rb') as f:
+                        file_content = f.read()
+                    
+                    # Keep markdown extension
+                    rel_filename = os.path.basename(md_file)
+                
+                # Add the file to the database
+                success, message = add_document_to_db(db_name, rel_filename, file_content)
+                if not success:
+                    status_container.warning(f"Issue with file {rel_filename}: {message}")
+                
+            except Exception as e:
+                status_container.warning(f"Error processing {md_file}: {str(e)}")
+                continue
+        
+        # Update the database if embedding model is available
+        update_status("Step 3/3: Updating database with embeddings...", 0.5)
+        
+        if hasattr(st.session_state, 'embeddingModel') and st.session_state.embeddingModel:
+            embedding_model = st.session_state.embeddingModel
+            
+            try:
+                # Call the update_db function to process the files and create embeddings
+                success, message, processed_docs = await update_db(
+                    db_name=db_name,
+                    embedding_model=embedding_model,
+                    chroma_client=st.session_state.chroma_client,
+                    chunk_size=int(st.session_state.chunk_size if hasattr(st.session_state, 'chunk_size') else 1000),
+                    overlap=int(st.session_state.overlap if hasattr(st.session_state, 'overlap') else 200),
+                    context_model=st.session_state.context_model if hasattr(st.session_state, 'ContextualRAG') and st.session_state.ContextualRAG else None,
+                    use_contextual_rag=st.session_state.ContextualRAG if hasattr(st.session_state, 'ContextualRAG') else False,
+                    progress_callback=update_status
+                )
+                
+                if success:
+                    # Mark database as ready
+                    if 'databases' in st.session_state:
+                        st.session_state.databases[db_name] = {
+                            "ready": True,
+                            "collection": get_client().get_collection(f"rag_collection_{db_name}")
+                        }
+                    
+                    # Update available databases list
+                    if 'available_databases' in st.session_state:
+                        if db_name not in st.session_state.available_databases:
+                            st.session_state.available_databases.append(db_name)
+                    
+                    return True, f"""
+                    ✅ RAG database '{db_name}' created and indexed successfully!
+                    
+                    Your research is now ready to use in the Chat page (💬).
+                    """
+                else:
+                    # Database was created but update failed
+                    if 'databases' in st.session_state:
+                        st.session_state.databases[db_name] = {"ready": False, "collection": None}
+                    
+                    # Update available databases list
+                    if 'available_databases' in st.session_state:
+                        if db_name not in st.session_state.available_databases:
+                            st.session_state.available_databases.append(db_name)
+                    
+                    return False, f"""
+                    ⚠️ Database '{db_name}' was created but indexing failed: {message}
+                    
+                    You can try updating it manually from the RAG Config page (🔗).
+                    """
+            except Exception as e:
+                status_container.error(f"Error updating database: {str(e)}")
+                
+                # Still update the available databases since files were created
+                if 'available_databases' in st.session_state:
+                    if db_name not in st.session_state.available_databases:
+                        st.session_state.available_databases.append(db_name)
+                
+                if 'databases' in st.session_state:
+                    st.session_state.databases[db_name] = {"ready": False, "collection": None}
+                
+                return False, f"""
+                ⚠️ Database '{db_name}' was created but encountered an error during indexing.
+                
+                Please go to the RAG Config page (🔗) to update it manually.
+                """
+        else:
+            # No embedding model available
+            if 'available_databases' in st.session_state:
+                if db_name not in st.session_state.available_databases:
+                    st.session_state.available_databases.append(db_name)
+            
+            if 'databases' in st.session_state:
+                st.session_state.databases[db_name] = {"ready": False, "collection": None}
+                
+            return True, f"""
+            ✅ RAG database '{db_name}' created with research files!
+            
+            Next steps:
+            1. Go to the Model Settings page (⚙️) to select an embedding model
+            2. Go to the RAG Config page (🔗) to update the database
+            3. Click on '{db_name}' in the database list
+            4. Click the 'Update' button to process the files
+            5. Return to the Chat page (💬) to use your research in conversations
+            """
+            
+    except Exception as e:
+        return False, f"Error creating RAG database: {str(e)}"
 
 async def research_subtopic(subtopic, search_tools, synthesis_chain, main_topic, status_text):
     """Conduct research on a specific subtopic."""
@@ -563,11 +796,14 @@ async def conduct_research(topic):
             if message:
                 status_text.text(message)
             if progress_value is not None:
-                progress_bar.progress(progress_value)
+                # Ensure progress value is within valid range [0.0, 1.0]
+                capped_progress = min(1.0, max(0.0, progress_value))
+                progress_bar.progress(capped_progress)
             # Check if stop has been requested - important for responsiveness
             if st.session_state.stop_requested:
-                st.warning("Research process stopping...")
-                st.session_state.research_in_progress = False
+                status_text.warning("Research process stopping - completing current operation...")
+                # Don't set research_in_progress to False here, 
+                # it will be set to False in the finally block of conduct_research
                 return True
             return False
             
@@ -695,18 +931,29 @@ async def conduct_research(topic):
         # Step 3: Research each subtopic
         all_summaries = []
         all_sources = []  # Track all sources across subtopics
+        
+        # Calculate how much progress to allocate for each subtopic (making sure total doesn't exceed 1.0)
+        total_subtopic_progress = 0.55  # Total progress allocation for all subtopics
+        subtopic_start = 0.25  # Starting progress value before subtopics
+        subtopic_count = min(len(subtopics), st.session_state.num_subtopics)
+        
         for idx, subtopic in enumerate(subtopics[:st.session_state.num_subtopics], 1):
+            # Calculate exact position in the progress bar range safely
+            current_subtopic_progress = subtopic_start + (total_subtopic_progress * ((idx-1) / subtopic_count))
+            
             # Check after each subtopic - critical for responsiveness
             if researchUpdate(f"Researching subtopic {idx}/{st.session_state.num_subtopics}: {subtopic}", 
-                         0.25 + (0.55 * ((idx-1) / st.session_state.num_subtopics))):
+                              current_subtopic_progress):
                 return
             
             # Research the subtopic with main topic context
             result, webpage_contents, collected_urls = await research_subtopic(subtopic, search_tools, synthesis_chain, topic, subtopic_status)
 
+            # Calculate progress after completion
+            completed_progress = subtopic_start + (total_subtopic_progress * (idx / subtopic_count))
+            
             # Check after each subtopic is complete
-            if researchUpdate(f"Completed research on subtopic {idx}", 
-                         0.25 + (0.55 * (idx / st.session_state.num_subtopics))):
+            if researchUpdate(f"Completed research on subtopic {idx}", completed_progress):
                 return
 
             # Add any collected URLs to all_sources list
@@ -771,8 +1018,8 @@ async def conduct_research(topic):
                 })
             
             # Update UI after writing files
-            if researchUpdate(f"Saved research for subtopic {idx}", 
-                        0.25 + (0.55 * (idx / st.session_state.num_subtopics)) + 0.01):
+            file_saved_progress = min(0.8, completed_progress + 0.01)
+            if researchUpdate(f"Saved research for subtopic {idx}", file_saved_progress):
                 return
         
         # Step 4: Create final synthesis
@@ -798,10 +1045,13 @@ async def conduct_research(topic):
             st.error(f"Error creating final synthesis: {str(e)}")
             return
         
-        if researchUpdate("Research complete!", 1.0):
+        if researchUpdate("Research complete!", 0.95):
             return
             
         debug_container.empty()
+        
+        # Ensure the progress bar is exactly at 100%
+        progress_bar.progress(1.0)
         
         # Show success message with directory location
         st.success(f"Research completed successfully! Results saved to: {research_dir}")
@@ -1003,6 +1253,52 @@ if st.session_state.research_summary:
                                         st.markdown(preview)
                                     except Exception as e:
                                         st.error(f"Error reading file: {str(e)}")
+                        
+                        # Add Create RAG DB button
+                        st.markdown("---")
+                        st.markdown("### Create RAG Database")
+                        st.markdown("Convert research files into a RAG database for chat and Q&A.")
+                        
+                        # Button should be enabled only when research is completed (not in progress)
+                        # and there's actual research data available
+                        button_disabled = (
+                            st.session_state.research_in_progress or
+                            not os.path.exists(research_dir) or
+                            not os.path.isdir(research_dir) or
+                            len(all_files) < 2  # Need at least overview and one other file
+                        )
+                        
+                        create_rag_db_button = st.button(
+                            "🔄 Create RAG DB",
+                            disabled=button_disabled,
+                            type="primary",
+                            use_container_width=True,
+                            help="Convert research files into a RAG database for use in the Chat page"
+                        )
+                        
+                        if button_disabled and not st.session_state.research_in_progress:
+                            st.info("Research data is required to create a RAG database. Run a research query to generate files.")
+                        
+                        if create_rag_db_button:
+                            # Get the cleaned topic name (without timestamp)
+                            topic_name = current_research_dir.split('_')[0] if '_' in current_research_dir else current_research_dir
+                            
+                            # Create a progress bar for the conversion process
+                            rag_progress = st.empty()
+                            rag_status = st.empty()
+                            
+                            # Show status
+                            rag_status.info("Starting conversion of research files to RAG database...")
+                            
+                            # Use asyncio.run to run the async function
+                            import asyncio
+                            success, message = asyncio.run(create_rag_db_from_research(research_dir, topic_name, rag_progress, rag_status))
+                            
+                            # Update UI based on result
+                            if success:
+                                rag_status.success(message)
+                            else:
+                                rag_status.error(message)
                     else:
                         st.warning("No markdown files found in the research directory.")
             else:

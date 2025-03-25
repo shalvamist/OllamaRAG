@@ -1,17 +1,49 @@
-streamlit
-langchain
-langchain-ollama
-langchain-text-splitters
-langchain-community
-duckduckgo-search
-ollama
-asyncio
-uuid
-chromadb
-pypdf
-bm25s
-beautifulsoup4
-aiohttp
-requests
-urllib3
-wikipedia
+# Core dependencies
+streamlit>=1.29.0
+ollama>=0.1.5
+langchain>=0.0.335
+langchain-community>=0.0.16
+langchain-ollama>=0.0.1
+
+# Document processing
+chromadb>=0.4.22
+unstructured>=0.10.30
+pypdf>=3.17.1
+pydantic>=2.5.2
+pdf2image>=1.16.3
+pypandoc>=1.12
+python-docx>=1.0.1
+sentence-transformers>=2.2.2
+
+# Web tools and research
+wikipedia>=1.4.0
+duckduckgo-search>=3.9.9
+beautifulsoup4>=4.12.2
+requests>=2.31.0
+pyserper>=0.1.5
+
+# Markdown and text processing
+markdown>=3.5.1
+markdownify>=0.11.6
+
+# Utility
+tqdm>=4.66.1
+uuid>=1.30
+aiohttp>=3.9.1
+asyncio>=3.4.3
+numpy>=1.26.2
+pandas>=2.1.3
+
+# Web page processing tools
+bs4>=0.0.1
+lxml>=4.9.3
+
+# Database support
+sqlite3-api>=2.0.1
+
+# Visual elements 
+matplotlib>=3.8.2
+plotly>=5.18.0
+
+# Optional: for improved performance
+llama-cpp-python>=0.2.19 

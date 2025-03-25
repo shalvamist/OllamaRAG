@@ -11,7 +11,7 @@ from uuid import uuid4
 import chromadb
 import chromadb.utils.embedding_functions as embedding_functions
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.document_loaders import PyPDFLoader
+from langchain_community.document_loaders import PyPDFLoader, TextLoader
 from langchain_ollama import OllamaLLM
 from langchain.retrievers import BM25Retriever
 import ollama
@@ -167,7 +167,7 @@ def get_db_documents(db_name: str) -> List[str]:
     try:
         db_path = os.path.join(SOURCE_PATH, db_name)
         if os.path.exists(db_path):
-            return [f for f in os.listdir(db_path) if f.endswith('.pdf')]
+            return [f for f in os.listdir(db_path) if f.endswith(('.pdf', '.md'))]
         return []
     except Exception:
         return []
@@ -176,7 +176,7 @@ def get_doc_files(db_name):
     """Get list of document files in a database directory."""
     db_path = os.path.join(SOURCE_PATH, db_name)
     if os.path.exists(db_path):
-        return [f for f in os.listdir(db_path) if f.endswith('.pdf')]
+        return [f for f in os.listdir(db_path) if f.endswith(('.pdf', '.md'))]
     return []
 
 def get_db_directory(db_name):
@@ -244,8 +244,19 @@ async def load_documents(chunk_size, overlap, docs, context_llm=None):
         print(f"Processing file: {doc_path}")
         if os.path.exists(doc_path):
             try:
-                # Load PDF using PyPDFLoader
-                loader = PyPDFLoader(doc_path)
+                # Select the appropriate loader based on file extension
+                if doc_path.lower().endswith('.pdf'):
+                    # Load PDF using PyPDFLoader
+                    loader = PyPDFLoader(doc_path)
+                elif doc_path.lower().endswith('.md'):
+                    # Load markdown as text
+                    loader = TextLoader(doc_path)
+                else:
+                    # Skip unsupported file types
+                    print(f"Unsupported file type: {doc_path}")
+                    continue
+                
+                # Load the document
                 pages = loader.load()
                 
                 # Split documents
@@ -364,13 +375,16 @@ async def update_db(
             if progress_callback:
                 progress_callback(f"Created database directory: {db_path}", 0.1)
 
-        # Get list of PDF files
-        source_files = [f for f in os.listdir(db_path) if f.endswith('.pdf')]
+        # Get list of document files (PDF and Markdown)
+        source_files = [f for f in os.listdir(db_path) if f.endswith(('.pdf', '.md'))]
         if not source_files:
-            return False, "No PDF files found in the database folder.", None
+            return False, "No document files found in the database folder. Both PDF and Markdown files are supported.", None
             
         if progress_callback:
-            progress_callback(f"Found {len(source_files)} PDF files", 0.15)
+            # Count file types for better reporting
+            pdf_count = sum(1 for f in source_files if f.endswith('.pdf'))
+            md_count = sum(1 for f in source_files if f.endswith('.md'))
+            progress_callback(f"Found {len(source_files)} document files ({pdf_count} PDFs, {md_count} Markdown)", 0.15)
 
         # Initialize context LLM if needed
         context_llm = None
