@@ -4,6 +4,9 @@ source_documents/
 # Research results directory
 research_results/
 
+# Devcontainer directory
+.devcontainer/
+
 # Database directory
 chroma_db/
 

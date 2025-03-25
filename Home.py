@@ -181,6 +181,24 @@ deep research capabilities, and debate tools - all running locally on your machi
 </div>
 """, unsafe_allow_html=True)
 
+# Quick Start Guide
+st.markdown('<h2 style="color: #1E88E5;">Getting Started</h2>', unsafe_allow_html=True)
+
+st.markdown("""
+<div style="background-color: #f0f7ff; padding: 20px; border-radius: 10px; margin-bottom: 20px;">
+<h3 style="color: #1E88E5; margin-top: 0;">📚 Quick Start Guide</h3>
+
+<ol>
+    <li><strong>Set up a model</strong> - First, visit the Model Settings page to select and configure your Ollama model</li>
+    <li><strong>Configure RAG</strong> - Upload documents and set up your embedding model in the RAG Configuration page</li>
+    <li><strong>Start chatting</strong> - Use the Chat interface to interact with your model with document context</li>
+    <li><strong>Try advanced features</strong> - Explore Deep Research or Debate simulation capabilities</li>
+</ol>
+
+<p><strong>Need Help?</strong> Each page includes detailed instructions and tooltips to guide you through the process.</p>
+</div>
+""", unsafe_allow_html=True)
+
 # Features section in a grid layout
 st.markdown('<h2 style="color: #1E88E5;">Main Features</h2>', unsafe_allow_html=True)
 
@@ -346,25 +364,6 @@ with col3:
             <a href="./🔗_RAG_Config">Upload documents →</a>
         </div>
         """, unsafe_allow_html=True)
-
-# Quick Start Guide
-st.markdown('<h2 style="color: #1E88E5; margin-top: 30px;">Getting Started</h2>', unsafe_allow_html=True)
-
-st.markdown("""
-<div style="background-color: #f0f7ff; padding: 20px; border-radius: 10px; margin-bottom: 20px;">
-<h3 style="color: #1E88E5; margin-top: 0;">📚 Quick Start Guide</h3>
-
-<ol>
-    <li><strong>Set up a model</strong> - First, visit the Model Settings page to select and configure your Ollama model</li>
-    <li><strong>Configure RAG</strong> - Upload documents and set up your embedding model in the RAG Configuration page</li>
-    <li><strong>Start chatting</strong> - Use the Chat interface to interact with your model with document context</li>
-    <li><strong>Try advanced features</strong> - Explore Deep Research or Debate simulation capabilities</li>
-</ol>
-
-<p><strong>Need Help?</strong> Each page includes detailed instructions and tooltips to guide you through the process.</p>
-</div>
-""", unsafe_allow_html=True)
-
 # Footer
 st.markdown("""
 <div style="margin-top: 50px; text-align: center; color: #666; font-size: 0.9em;">

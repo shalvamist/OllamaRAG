@@ -332,8 +332,7 @@ async def research_subtopic(subtopic, search_tools, synthesis_chain, main_topic,
         # Check if stop was requested
         if st.session_state.stop_requested:
             status_text.warning("Research stopped by user.")
-            st.session_state.research_in_progress = False
-            return None, None
+            return None, None, None
             
         # Initialize LLM chains
         llm = OllamaLLM(
@@ -376,8 +375,7 @@ async def research_subtopic(subtopic, search_tools, synthesis_chain, main_topic,
             # Check if stop was requested
             if st.session_state.stop_requested:
                 status_text.warning("Research stopped by user.")
-                st.session_state.research_in_progress = False
-                return None, None
+                return None, None, None
                 
             search_attempt += 1
             
@@ -483,13 +481,18 @@ async def research_subtopic(subtopic, search_tools, synthesis_chain, main_topic,
             # Combine search results with detailed content
             combined_results = []
             summaries_subtopic = ""
+            collected_urls = []  # Track sources for this subtopic
 
             for result in detailed_results:
                 # Check if stop was requested
                 if st.session_state.stop_requested:
                     status_text.warning("Research stopped by user.")
-                    st.session_state.research_in_progress = False
-                    return None, None
+                    return None, None, None
+                    
+                # Add source to all_sources regardless of evaluation result
+                if 'url' in result:
+                    # Track this URL for the final sources list
+                    collected_urls.append(result['url'])
                     
                 # Evaluate combined results
                 try:
@@ -517,8 +520,7 @@ async def research_subtopic(subtopic, search_tools, synthesis_chain, main_topic,
         # Check if stop was requested
         if st.session_state.stop_requested:
             status_text.warning("Research stopped by user.")
-            st.session_state.research_in_progress = False
-            return None, None
+            return None, None, None
             
         status_text.text(f"Synthesizing findings for {subtopic}")
         # Synthesize findings using combined results
@@ -527,14 +529,14 @@ async def research_subtopic(subtopic, search_tools, synthesis_chain, main_topic,
             "results": summaries_subtopic
         }))["text"]
             
-            # Clean up the debug container
+        # Clean up the debug container
         status_text.empty()
         
-        return synthesis_result, combined_results  # Return both the synthesis and webpage contents
+        return synthesis_result, combined_results, collected_urls  # Return synthesis, webpage contents, and all URLs
         
     except Exception as e:
         st.error(f"Error researching subtopic '{subtopic}': {str(e)}")
-        return None, None
+        return None, None, None
 
 async def conduct_research(topic):
     """
@@ -654,7 +656,6 @@ async def conduct_research(topic):
         # Check if stop was requested
         if st.session_state.stop_requested:
             status_text.warning("Research stopped by user.")
-            st.session_state.research_in_progress = False
             return
             
         try:
@@ -698,18 +699,20 @@ async def conduct_research(topic):
             # Check after each subtopic - critical for responsiveness
             if researchUpdate(f"Researching subtopic {idx}/{st.session_state.num_subtopics}: {subtopic}", 
                          0.25 + (0.55 * ((idx-1) / st.session_state.num_subtopics))):
-                st.session_state.research_in_progress = False
                 return
             
             # Research the subtopic with main topic context
-            result, webpage_contents = await research_subtopic(subtopic, search_tools, synthesis_chain, topic, subtopic_status)
+            result, webpage_contents, collected_urls = await research_subtopic(subtopic, search_tools, synthesis_chain, topic, subtopic_status)
 
             # Check after each subtopic is complete
             if researchUpdate(f"Completed research on subtopic {idx}", 
                          0.25 + (0.55 * (idx / st.session_state.num_subtopics))):
-                st.session_state.research_in_progress = False
                 return
 
+            # Add any collected URLs to all_sources list
+            if collected_urls:
+                all_sources.extend(collected_urls)
+            
             if result:
                 # Create subtopic file
                 subtopic_file = os.path.join(subtopics_dir, f"{sanitize_filename(subtopic)}.md")
@@ -719,7 +722,6 @@ async def conduct_research(topic):
                 content += "## Webpage Contents\n\n"
                 for webpage in webpage_contents:
                     content += f"### URL - {webpage['url']}\n\n"
-                    all_sources.append(webpage['url'])
                     content += "#### Content\n"
                     content += f"```\n{webpage['content']}\n```\n\n"
                 
@@ -727,9 +729,40 @@ async def conduct_research(topic):
                 content += "## Subtopic Summary\n\n"
                 content += f"{result}\n\n"
                 
-                # Add sources and key points
-                content += "## Sources\n"
-                content += f"{all_sources}\n\n"
+                # Add sources in a more structured format
+                content += "## Sources\n\n"
+                # Group by types for cleaner display
+                web_sources = []
+                wiki_sources = []
+                other_sources = []
+                
+                if collected_urls:
+                    for source in collected_urls:
+                        if source.startswith(('http://', 'https://')):
+                            web_sources.append(source)
+                        elif source.startswith('Wikipedia:'):
+                            wiki_sources.append(source)
+                        else:
+                            other_sources.append(source)
+                
+                # Format and display sources by type
+                if web_sources:
+                    content += "### Web Sources\n"
+                    for idx, url in enumerate(web_sources, 1):
+                        content += f"{idx}. {url}\n"
+                    content += "\n"
+                    
+                if wiki_sources:
+                    content += "### Wikipedia Sources\n"
+                    for idx, wiki in enumerate(wiki_sources, 1):
+                        content += f"{idx}. {wiki}\n"
+                    content += "\n"
+                    
+                if other_sources:
+                    content += "### Other Sources\n"
+                    for idx, other in enumerate(other_sources, 1):
+                        content += f"{idx}. {other}\n"
+                    content += "\n"
                 
                 write_markdown_file(subtopic_file, content)
                 all_summaries.append({
@@ -740,12 +773,10 @@ async def conduct_research(topic):
             # Update UI after writing files
             if researchUpdate(f"Saved research for subtopic {idx}", 
                         0.25 + (0.55 * (idx / st.session_state.num_subtopics)) + 0.01):
-                st.session_state.research_in_progress = False
                 return
         
         # Step 4: Create final synthesis
         if researchUpdate("Creating final research synthesis...", 0.85):
-            st.session_state.research_in_progress = False
             return
             
         try:
@@ -768,7 +799,6 @@ async def conduct_research(topic):
             return
         
         if researchUpdate("Research complete!", 1.0):
-            st.session_state.research_in_progress = False
             return
             
         debug_container.empty()
@@ -780,6 +810,12 @@ async def conduct_research(topic):
         st.error(f"Research Error: {str(e)}")
     finally:
         st.session_state.research_in_progress = False
+
+# Main research interface in a card-like container
+st.markdown("""
+<h2 style="color: #1E88E5; margin-top: 0;">Research Topic</h2>
+</div>
+""", unsafe_allow_html=True)
 
 research_topic = st.text_input(
     "Enter your research query",
@@ -819,14 +855,13 @@ with col1:
             # Check if research was stopped - provide feedback
             if st.session_state.stop_requested:
                 st.warning(f"Research on '{research_topic}' was stopped by user request.")
-                st.session_state.research_in_progress = False
             else:
                 st.success(f"Research on '{research_topic}' completed successfully!")
 
 with col2:
     stop_button = st.button(
         "⏹️ Stop", 
-        # disabled=not st.session_state.research_in_progress,
+        disabled=not st.session_state.research_in_progress,
         use_container_width=True,
         type="secondary"
     )
@@ -865,15 +900,45 @@ if st.session_state.research_summary:
     with tabs[1]:
         if st.session_state.sources:
             st.markdown("### Sources Used in Research")
-            # Filter and display only valid web URLs
-            web_sources = [source for source in st.session_state.sources if source.startswith(('http://', 'https://'))]
+            
+            # Group sources by type
+            web_sources = []
+            wiki_sources = []
+            other_sources = []
+            
+            for source in st.session_state.sources:
+                source = source.strip().rstrip('.')
+                if source.startswith(('http://', 'https://')):
+                    web_sources.append(source)
+                elif source.startswith('Wikipedia:'):
+                    wiki_sources.append(source)
+                else:
+                    other_sources.append(source)
+            
+            # Display web sources
             if web_sources:
+                st.markdown("#### Web Sources")
                 for idx, source in enumerate(web_sources, 1):
-                    # Clean the URL and ensure it's properly formatted
-                    clean_url = source.strip().rstrip('.')
-                    st.markdown(f"{idx}. [{clean_url}]({clean_url})")
-            else:
-                st.info("No web sources were found in the search results.") 
+                    st.markdown(f"{idx}. [{source}]({source})")
+            
+            # Display Wikipedia sources
+            if wiki_sources:
+                st.markdown("#### Wikipedia Sources")
+                for idx, source in enumerate(wiki_sources, 1):
+                    # Extract article title for better display
+                    article_title = source.replace('Wikipedia:', '').strip()
+                    search_query = article_title.replace(' ', '+')
+                    wiki_url = f"https://en.wikipedia.org/wiki/Special:Search?search={search_query}"
+                    st.markdown(f"{idx}. [{article_title}]({wiki_url})")
+            
+            # Display other sources
+            if other_sources:
+                st.markdown("#### Other Sources")
+                for idx, source in enumerate(other_sources, 1):
+                    st.markdown(f"{idx}. {source}")
+                    
+            if not (web_sources or wiki_sources or other_sources):
+                st.info("No sources were found in the search results.")
         else:
             st.info("No sources are available for this research.")
     
