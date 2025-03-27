@@ -6,7 +6,8 @@ from bs4 import SoupStrainer
 from langchain_community.document_loaders import WebBaseLoader
 
 # Research prompt templates
-SEARCH_QUERY_TEMPLATE = """Generate a search query for web research.
+SEARCH_QUERY_TEMPLATE = """
+Generate a search query for web research.
 
 MAIN TOPIC: {main_topic}
 SUBTOPIC: {topic}
@@ -32,16 +33,19 @@ GOOD EXAMPLES:
 
 YOUR QUERY:"""
 
-SUBTOPICS_TEMPLATE = """Generate a list of comprehensive subtopics for detailed research on the given topic.
+SUBTOPICS_TEMPLATE = """
+Generate a list of comprehensive subtopics for detailed research on the given topic.
 
 TOPIC: {topic}
+NUMBER OF SUBTOPICS: {num_subtopics}
 
 INSTRUCTIONS:
-1. Analyze the topic and break it down into logical subtopics
+1. Analyze the topic and break it down into EXACTLY {num_subtopics} logical subtopics
 2. Each subtopic should be specific and focused
 3. Include both fundamental and advanced aspects
 4. Ensure coverage is comprehensive
 5. Each subtopic should be a clear, concise phrase
+6. Generate EXACTLY {num_subtopics} subtopics - no more, no less
 
 EXAMPLE RESPONSE:
 {{
@@ -57,6 +61,7 @@ EXAMPLE RESPONSE:
 YOUR RESPONSE MUST BE A VALID JSON OBJECT WITH THE EXACT STRUCTURE SHOWN ABOVE.
 DO NOT include any additional text, formatting, or explanations.
 DO NOT use newlines within the JSON structure.
+ENSURE the "subtopics" array contains EXACTLY {num_subtopics} items.
 
 RESPONSE:"""
 
@@ -118,7 +123,7 @@ INSTRUCTIONS:
 5. Include practical implications and next steps
 
 YOUR RESPONSE MUST follow this exact structure:
-```markdown
+```
 # Research Report: [Topic]
 
 ## Executive Summary
@@ -154,7 +159,8 @@ REQUIREMENTS:
 
 RESPONSE:"""
 
-SEARCH_RESULTS_EVALUATION_TEMPLATE = """Evaluate the quality and relevance of these search results.
+SEARCH_RESULTS_EVALUATION_TEMPLATE = """
+Evaluate the quality and relevance of these search results.
 
 TOPIC: {topic}
 SEARCH_RESULTS: {results}
@@ -166,14 +172,14 @@ INSTRUCTIONS:
    - Quality of sources
    - Comprehensiveness
 2. Return ONLY a JSON object with your evaluation
-3. If the results are not relevant or comprehensive, return false for is_sufficient
-4. If the results are relevant and comprehensive, return true for is_sufficient
+3. If the results are not relevant or comprehensive, return false for sufficient_data
+4. If the results are relevant and comprehensive, return true for sufficient_data
 5. Rate the quality of the results from 0-10
 6. Provide 2 reasons for your assessment
 
 YOUR RESPONSE MUST BE A VALID JSON OBJECT WITH THIS EXACT STRUCTURE:
 {{
-    "sufficient_data": True/False,
+    "sufficient_data": true/false,
     "quality_score": 0-10,
     "reasons": [
         "Reason 1 for assessment",
@@ -186,7 +192,7 @@ YOUR RESPONSE MUST BE A VALID JSON OBJECT WITH THIS EXACT STRUCTURE:
 }}
 
 REQUIREMENTS:
-1. is_sufficient: Set to true only if results are both relevant and comprehensive
+1. sufficient_data: Set to true only if results are both relevant and comprehensive (MUST USE THIS EXACT KEY NAME)
 2. quality_score: Rate from 0-10 where:
    - 0-3: Poor quality/irrelevant
    - 4-6: Moderate quality but incomplete
@@ -195,6 +201,123 @@ REQUIREMENTS:
 4. List missing aspects if quality_score < 7
 
 RESPONSE:"""
+
+# Thinking Section Template - Used for displaying thinking sections in the UI
+THINKING_SECTION_TEMPLATE = '''<details class="thinking-details">
+    <summary>💭 Thinking Process</summary>
+    <div class="thinking-content">
+        {content}
+    </div>
+</details>'''
+
+# CSS for thinking sections - Can be included in page styling
+THINKING_CSS = '''
+/* Thinking process container styling */
+.thinking-details {
+    margin: 0.75em 0;
+    padding: 0.25em;
+    border-radius: 4px;
+    background-color: #f5f7f9;
+    border: 1px solid #e0e0e0;
+}
+
+.thinking-content {
+    margin: 0.5em 0;
+    padding: 0.75em;
+    background-color: #f8f9fa;
+    border-radius: 4px;
+    border-left: 3px solid #1E88E5;
+}
+
+.thinking-text {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace;
+    font-size: 0.9em;
+    line-height: 1.4;
+    color: #333;
+}
+
+details > summary {
+    cursor: pointer;
+    padding: 0.3em 0.5em;
+    border-radius: 4px;
+    font-weight: 500;
+    color: #1E88E5;
+    font-size: 0.9em;
+}
+
+details > summary:hover {
+    background-color: #e9ecef;
+}
+
+details[open] > summary {
+    margin-bottom: 0.4em;
+    border-bottom: 1px solid #eaecef;
+}'''
+
+def format_thinking_content(content):
+    """Format thinking content with markdown code block and monospace styling."""
+    # Clean up the content and ensure proper formatting
+    content = content.strip()
+    # Wrap in monospace styling without explicit code blocks
+    return f'<div class="thinking-text">{content}</div>'
+
+def clean_thinking_tags(content):
+    """
+    Clean <think> tags from content when we need just the final output.
+    Returns the content without any thinking tags or thinking content.
+    """
+    if not content:
+        return ""
+        
+    if '<think>' in content:
+        # If thinking tags are present, extract only the final answer after thinking
+        if '</think>' in content:
+            # Get everything after the </think> tag
+            content = content.split('</think>')[-1].strip()
+        else:
+            # If closing tag is missing, just take the part before the thinking started
+            content = content.split('<think>')[0].strip()
+    return content
+
+def parse_thinking_content(content):
+    """
+    Parse content to handle thinking sections from model output.
+    Returns formatted content with thinking sections displayed as collapsible details.
+    """
+    if not content or ('<think>' not in content or '</think>' not in content):
+        return content
+        
+    try:
+        parts = content.split('</think>')
+        if len(parts) > 1:
+            pre_think = parts[0].split('<think>')[0].strip()
+            post_think = parts[1].strip()
+            thinking_content = parts[0].split('<think>')[1].strip()
+            
+            # Format thinking section
+            thinking_section = THINKING_SECTION_TEMPLATE.format(
+                content=format_thinking_content(thinking_content)
+            )
+
+            # Combine parts with proper spacing
+            if pre_think and post_think:
+                return f"{pre_think}\n\n{thinking_section}\n\n{post_think}"
+            elif pre_think:
+                return f"{pre_think}\n\n{thinking_section}"
+            elif post_think:
+                return f"{thinking_section}\n\n{post_think}"
+            else:
+                return thinking_section
+    except Exception as e:
+        # If parsing fails, return original content
+        import streamlit as st
+        st.error(f"Error parsing thinking content: {str(e)}")
+        return content
+        
+    return content
 
 def sanitize_filename(name):
     """Convert a string to a valid filename."""
@@ -227,6 +350,25 @@ def write_markdown_file(filepath, content):
     """Write content to a markdown file."""
     with open(filepath, 'w', encoding='utf-8') as f:
         f.write(content)
+
+def write_markdown_with_thinking(file_path, content):
+    """
+    Writes markdown content to a file, preserving thinking sections.
+    This version ensures thinking sections are written properly to files.
+    """
+    try:
+        # Make sure the directory exists
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        
+        # Write the content to the file
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write(content)
+            
+        return True
+    except Exception as e:
+        import streamlit as st
+        st.error(f"Error writing to file {file_path}: {str(e)}")
+        return False
 
 async def fetch_and_process_url(url: str, debug_container) -> str:
     """Fetch and process content from a URL using WebBaseLoader with BeautifulSoup strainer."""

@@ -12,28 +12,34 @@ import os
 import asyncio
 import json
 import re
-import shutil  # Added for directory operations
-from urllib.parse import urlparse
-from bs4 import SoupStrainer
+import shutil  
+import time
 
 # Import utility functions from CommonUtils
 from CommonUtils.research_utils import (
     sanitize_filename,
     create_research_directory,
-    write_markdown_file,
     fetch_and_process_url,
     clean_json_string,
-    # Import prompt templates
     SEARCH_QUERY_TEMPLATE,
     SUBTOPICS_TEMPLATE,
     SUBTOPIC_SUMMARY_TEMPLATE,
     FINAL_SYNTHESIS_TEMPLATE,
-    SEARCH_RESULTS_EVALUATION_TEMPLATE
+    SEARCH_RESULTS_EVALUATION_TEMPLATE,
+    clean_thinking_tags,
+    parse_thinking_content,
+    THINKING_CSS,
+    write_markdown_with_thinking
 )
 
 # Import necessary RAG utilities
 from CommonUtils.rag_utils import SOURCE_PATH, get_client
 import pypandoc
+
+# Function to write markdown file - wrapper to handle thinking sections correctly
+def write_markdown_file_with_thinking(file_path, content):
+    """Wrapper around write_markdown_with_thinking to maintain backward compatibility."""
+    return write_markdown_with_thinking(file_path, content)
 
 # Set page config
 st.set_page_config(
@@ -43,80 +49,84 @@ st.set_page_config(
     layout="wide"
 )
 
-# Custom CSS styling
-st.markdown("""
+# Custom CSS styling (keeping other styles, replacing thinking-related ones)
+st.markdown(f"""
 <style>
     /* Main background and text colors */
-    .stApp {
+    .stApp {{
         color: #1a2234;
-    }
+    }}
     
     /* Headers */
-    h1 {
+    h1 {{
         color: #0D47A1 !important;
         margin-bottom: 1rem !important;
         font-size: 2.2em !important;
         font-weight: 800 !important;
-    }
+    }}
     
-    h2 {
+    h2 {{
         color: #1E88E5 !important;
         margin-bottom: 0.8rem !important;
         font-size: 1.8em !important;
         font-weight: 700 !important;
-    }
+    }}
+    
+    h3 {{
+        color: #1E88E5 !important;
+        margin-bottom: 0.6rem !important;
+        font-size: 1.4em !important;
+        font-weight: 600 !important;
+    }}
     
     /* Card styling */
-    [data-testid="stExpander"] {
+    [data-testid="stExpander"] {{
         border: none !important;
         box-shadow: none !important;
-    }
+    }}
     
     /* Buttons */
-    .stButton button {
+    .stButton button {{
         border-radius: 4px;
-    }
+    }}
     
     /* Container borders */
-    [data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlock"] > div[style*="flex-direction: column"] > div[data-testid="stVerticalBlock"] {
+    [data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlock"] > div[style*="flex-direction: column"] > div[data-testid="stVerticalBlock"] {{
         border-radius: 10px;
         padding: 1rem;
-    }
-    
-    /* Card headings */
-    .card-heading {
-        color: #555;
-        font-weight: 600;
-        font-size: 0.9rem;
-        margin-bottom: 0.5rem;
-    }
+    }}
     
     /* Success and warning messages */
-    .stSuccess, .stWarning, .stError, .stInfo {
+    .stSuccess, .stWarning, .stError, .stInfo {{
         border-radius: 4px;
-    }
+    }}
     
     /* Input fields */
-    .stTextInput input, .stNumberInput input, .stTextArea textarea, .stSelectbox select {
+    .stTextInput input, .stNumberInput input, .stTextArea textarea, .stSelectbox select {{
         border-radius: 4px;
-    }
+    }}
     
-    /* Research specific styling */
-    .research-summary {
-        background-color: #f0f7ff;
-        padding: 1rem;
+    /* Feature card styling */
+    .feature-card {{
+        background-color: #f8f9fa;
         border-radius: 8px;
         border-left: 4px solid #1E88E5;
-        margin: 1rem 0;
-    }
+        padding: 15px;
+        margin-bottom: 15px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }}
+    
+    /* Status indicators */
+    .status-card {{
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 15px;
+        background-color: #f8f9fa;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }}
 
-    .source-citation {
-        font-size: 0.8em;
-        color: #666;
-        border-top: 1px solid #eee;
-        margin-top: 0.5rem;
-        padding-top: 0.5rem;
-    }
+    /* Import thinking-related CSS from research_utils */
+    # {THINKING_CSS}
 </style>
 """, unsafe_allow_html=True)
 
@@ -613,107 +623,144 @@ async def research_subtopic(subtopic, search_tools, synthesis_chain, main_topic,
             search_attempt += 1
             
             # Generate contextual search query
-            search_query = (await search_query_chain.ainvoke({"main_topic": main_topic, "topic": subtopic}))["text"]
+            search_query_result = (await search_query_chain.ainvoke({"main_topic": main_topic, "topic": subtopic}))["text"]
             
-            # Debug search query
-            status_text.text(f"Search attempt {search_attempt}/{max_search_attempts} for: {search_query}")
+            # Process thinking sections for display while keeping original for clean query
+            formatted_query = parse_thinking_content(search_query_result)
+            # Clean for actual search use
+            search_query = clean_thinking_tags(search_query_result)
+            
+            # Debug search query - show with thinking sections parsed for display
+            status_text.markdown(f"Search attempt {search_attempt}/{max_search_attempts} for: {formatted_query}", unsafe_allow_html=True)
             
             detailed_results = []
             
             # Perform web searches based on enabled providers
             if search_tools.get('web') and not st.session_state.stop_requested:
                 status_text.text("Performing DuckDuckGo web search...")
-                search_results = search_tools['web'].run(search_query)
-                urls = re.findall(r'https?://[^\s<>"]+|www\.[^\s<>"]+', search_results)
-                status_text.text(f"Found URLs from web search: {urls}")
-                
-                # Process web URLs
-                for url in urls:
-                    status_text.text(f"Processing URL: {url}")
-                    content = await fetch_and_process_url(url, status_text)
-                    if content:
-                        detailed_results.append({
-                            "url": url,
-                            "content": content,
-                            "source": "web"
-                        })
+                try:
+                    # Important: Search query must be clean of thinking tags before sending to search provider
+                    clean_query = clean_thinking_tags(search_query)
+                    search_results = search_tools['web'].run(clean_query)  
+                    urls = re.findall(r'https?://[^\s<>"]+|www\.[^\s<>"]+', search_results)
+                    status_text.text(f"Found URLs from web search: {urls}")
+                    
+                    # Process web URLs
+                    for url in urls:
+                        try:
+                            status_text.text(f"Processing URL: {url}")
+                            content = await fetch_and_process_url(url, status_text)
+                            if content:
+                                detailed_results.append({
+                                    "url": url,
+                                    "content": content,
+                                    "source": "web"
+                                })
+                        except Exception as e:
+                            status_text.warning(f"Error processing URL {url}: {str(e)}")
+                except Exception as e:
+                    status_text.warning(f"DuckDuckGo web search error: {str(e)}")
             
             # Perform news search if enabled
             if search_tools.get('news') and not st.session_state.stop_requested:
                 status_text.text("Performing DuckDuckGo news search...")
-                news_results = search_tools['news'].run(search_query)
-                news_urls = re.findall(r'https?://[^\s<>"]+|www\.[^\s<>"]+', news_results)
-                status_text.text(f"Found URLs from news search: {news_urls}")
-                
-                # Process news URLs
-                for url in news_urls:
-                    status_text.text(f"Processing news URL: {url}")
-                    content = await fetch_and_process_url(url, status_text)
-                    if content:
-                        detailed_results.append({
-                            "url": url,
-                            "content": content,
-                            "source": "news"
-                        })
+                try:
+                    # Important: Search query must be clean of thinking tags before sending to search provider
+                    clean_query = clean_thinking_tags(search_query)
+                    news_results = search_tools['news'].run(clean_query)
+                    news_urls = re.findall(r'https?://[^\s<>"]+|www\.[^\s<>"]+', news_results)
+                    status_text.text(f"Found URLs from news search: {news_urls}")
+                    
+                    # Process news URLs
+                    for url in news_urls:
+                        try:
+                            status_text.text(f"Processing news URL: {url}")
+                            content = await fetch_and_process_url(url, status_text)
+                            if content:
+                                detailed_results.append({
+                                    "url": url,
+                                    "content": content,
+                                    "source": "news"
+                                })
+                        except Exception as e:
+                            status_text.warning(f"Error processing news URL {url}: {str(e)}")
+                except Exception as e:
+                    status_text.warning(f"DuckDuckGo news search error: {str(e)}")
             
             # Get Google Serper results if enabled
             if search_tools.get('google_serper') and not st.session_state.stop_requested:
                 status_text.text(f"Performing Google Serper {search_tools['google_serper_type']} search...")
                 
-                # Get the search results with full metadata
-                google_results = search_tools['google_serper'].results(search_query)
-                
-                # Extract URLs based on the search type
-                google_urls = []
-                
-                if search_tools['google_serper_type'] == 'search':
-                    # Extract URLs from organic search results
-                    if 'organic' in google_results:
-                        google_urls = [item['link'] for item in google_results['organic'] if 'link' in item]
+                try:
+                    # Get the search results with full metadata - use clean query
+                    clean_query = clean_thinking_tags(search_query)
+                    google_results = search_tools['google_serper'].results(clean_query)
                     
-                    # Add knowledge graph URL if available
-                    if 'knowledgeGraph' in google_results and 'descriptionLink' in google_results['knowledgeGraph']:
-                        google_urls.append(google_results['knowledgeGraph']['descriptionLink'])
-                
-                elif search_tools['google_serper_type'] == 'news':
-                    # Extract URLs from news results
-                    if 'news' in google_results:
-                        google_urls = [item['link'] for item in google_results['news'] if 'link' in item]
-                
-                elif search_tools['google_serper_type'] == 'images':
-                    # Extract source URLs from image results
-                    if 'images' in google_results:
-                        google_urls = [item['link'] for item in google_results['images'] if 'link' in item]
-                
-                status_text.text(f"Found URLs from Google Serper search: {google_urls}")
-                
-                # Process Google URLs
-                for url in google_urls:
-                    status_text.text(f"Processing Google Serper URL: {url}")
-                    content = await fetch_and_process_url(url, status_text)
-                    if content:
-                        detailed_results.append({
-                            "url": url,
-                            "content": content,
-                            "source": f"google_{search_tools['google_serper_type']}"
-                        })
+                    # Extract URLs based on the search type
+                    google_urls = []
+                    
+                    if search_tools['google_serper_type'] == 'search':
+                        # Extract URLs from organic search results
+                        if 'organic' in google_results:
+                            google_urls = [item['link'] for item in google_results['organic'] if 'link' in item]
+                        
+                        # Add knowledge graph URL if available
+                        if 'knowledgeGraph' in google_results and 'descriptionLink' in google_results['knowledgeGraph']:
+                            google_urls.append(google_results['knowledgeGraph']['descriptionLink'])
+                    
+                    elif search_tools['google_serper_type'] == 'news':
+                        # Extract URLs from news results
+                        if 'news' in google_results:
+                            google_urls = [item['link'] for item in google_results['news'] if 'link' in item]
+                    
+                    elif search_tools['google_serper_type'] == 'images':
+                        # Extract source URLs from image results
+                        if 'images' in google_results:
+                            google_urls = [item['link'] for item in google_results['images'] if 'link' in item]
+                    
+                    status_text.text(f"Found URLs from Google Serper search: {google_urls}")
+                    
+                    # Process Google URLs
+                    for url in google_urls:
+                        try:
+                            status_text.text(f"Processing Google Serper URL: {url}")
+                            content = await fetch_and_process_url(url, status_text)
+                            if content:
+                                detailed_results.append({
+                                    "url": url,
+                                    "content": content,
+                                    "source": f"google_{search_tools['google_serper_type']}"
+                                })
+                        except Exception as e:
+                            status_text.warning(f"Error processing Google URL {url}: {str(e)}")
+                except Exception as e:
+                    status_text.warning(f"Google Serper search error: {str(e)}")
             
             # Get Wikipedia results if enabled
             if search_tools.get('wikipedia') and not st.session_state.stop_requested:
                 status_text.text("Retrieving Wikipedia results...")
-                wikipedia_results = search_tools['wikipedia'].get_relevant_documents(search_query)
-                
-                # Process Wikipedia results
-                for wiki_doc in wikipedia_results:
-                    detailed_results.append({
-                        "url": f"Wikipedia: {wiki_doc.metadata.get('title', 'Unknown Article')}",
-                        "content": wiki_doc.page_content,
-                        "source": "wikipedia"
-                    })
+                try:
+                    # Use clean query for Wikipedia search
+                    clean_query = clean_thinking_tags(search_query)
+                    wikipedia_results = search_tools['wikipedia'].get_relevant_documents(clean_query)
+                    
+                    # Process Wikipedia results
+                    for wiki_doc in wikipedia_results:
+                        try:
+                            wiki_title = wiki_doc.metadata.get('title', 'Unknown Article')
+                            detailed_results.append({
+                                "url": f"Wikipedia: {wiki_title}",
+                                "content": wiki_doc.page_content,
+                                "source": "wikipedia"
+                            })
+                        except Exception as e:
+                            status_text.warning(f"Error processing Wikipedia article {wiki_doc.metadata.get('title', 'Unknown')}: {str(e)}")
+                except Exception as e:
+                    status_text.warning(f"Wikipedia search error: {str(e)}")
             
             # Combine search results with detailed content
             combined_results = []
-            summaries_subtopic = ""
+            summaries_subtopic = []
             collected_urls = []  # Track sources for this subtopic
 
             for result in detailed_results:
@@ -736,18 +783,64 @@ async def research_subtopic(subtopic, search_tools, synthesis_chain, main_topic,
                         "results": result['content']
                     }))["text"]
 
-                    evaluation_result = json.loads(evaluation_result)
+                    # Clean any thinking tags from the evaluation result
+                    evaluation_result = clean_thinking_tags(evaluation_result)
+
+                    # Add debug logging for the evaluation result
+                    status_text.text(f"Raw evaluation result: {evaluation_result[:100]}..." if len(evaluation_result) > 100 else evaluation_result)
+
+                    # Parse the JSON - handle different possible structures
+                    try:
+                        eval_data = json.loads(evaluation_result)
+                        
+                        # Check for "sufficient_data" or alternative keys
+                        is_sufficient = False
+                        
+                        # Try multiple possible key names that the LLM might generate
+                        if "sufficient_data" in eval_data:
+                            is_sufficient = eval_data["sufficient_data"]
+                        elif "is_sufficient" in eval_data:
+                            is_sufficient = eval_data["is_sufficient"]
+                        elif "sufficiency" in eval_data:
+                            is_sufficient = eval_data["sufficiency"]
+                        elif "relevant" in eval_data:
+                            is_sufficient = eval_data["relevant"]
+                        elif "quality_score" in eval_data:
+                            # If no direct sufficient flag but has score, use score threshold
+                            is_sufficient = eval_data["quality_score"] >= 5
+                        else:
+                            # If we can't determine, assume it's sufficient to include
+                            is_sufficient = True
+                            status_text.warning(f"Could not determine sufficiency from evaluation result, including content anyway")
+                        
+                        # Check if results are sufficient
+                        if is_sufficient:
+                            status_text.text(f"Found sufficient data in {result['url']} - adding to combined results")
+                            combined_results.append(result)
+                            summaries_subtopic.append(f"""
+                                URL: {result['url']}
+                                Source: {result['source']}
+                                Content: {result['content']}""".strip())
+                        else:
+                            status_text.text(f"Content from {result['url']} was deemed insufficient - skipping")
                     
-                    # Check if results are sufficient
-                    if evaluation_result["sufficient_data"]:
-                        status_text.text(f"Found sufficient data in {result['url']} - adding to combined results")
+                    except json.JSONDecodeError:
+                        # If JSON parsing fails, include the content anyway
+                        status_text.warning(f"Failed to parse evaluation as JSON, including content anyway")
                         combined_results.append(result)
-                        # Add to summaries with source indication
-                        source_prefix = f"[{source_type}] "
-                        summaries_subtopic += f"{source_prefix}{subtopic}\n\n\n{result['content']}\n\n"
+                        summaries_subtopic.append(f"""
+                            URL: {result['url']}
+                            Source: {result['source']}
+                            Content: {result['content']}""".strip())
 
                 except Exception as e:
-                    st.error(f"Error evaluating search results: {str(e)}")
+                    # st.error(f"Error evaluating search results: {str(e)}")
+                    # Still include the result even if evaluation fails
+                    combined_results.append(result)
+                    summaries_subtopic.append(f"""
+                        URL: {result['url']}
+                        Source: {result['source']}
+                        Content: {result['content']}""".strip())
                     continue
                 
         # Check if stop was requested
@@ -755,12 +848,37 @@ async def research_subtopic(subtopic, search_tools, synthesis_chain, main_topic,
             status_text.warning("Research stopped by user.")
             return None, None, None
             
+        # After all search attempts, check if we've found any results
+        if not combined_results and not collected_urls:
+            status_text.warning(f"No sufficient data found for subtopic '{subtopic}' after {max_search_attempts} search attempts")
+            
+            # If we have detailed results but no combined results (all were filtered out), use them anyway
+            if detailed_results:
+                status_text.text("Using all available results despite evaluation")
+                combined_results = detailed_results
+                collected_urls = [result['url'] for result in detailed_results if 'url' in result]
+                summaries_subtopic = []
+                
+                for result in detailed_results:
+                    summaries_subtopic.append(f"""
+URL: {result['url']}
+Source: {result['source']}
+Content: {result['content']}
+                    """.strip())
+            else:
+                # If no results found at all
+                return None, None, None
+            
         status_text.text(f"Synthesizing findings for {subtopic}")
+        
         # Synthesize findings using combined results
         synthesis_result = (await synthesis_chain.ainvoke({
             "topic": subtopic,
             "results": summaries_subtopic
         }))["text"]
+        
+        # Process thinking sections if present
+        synthesis_result = parse_thinking_content(synthesis_result)
             
         # Clean up the debug container
         status_text.empty()
@@ -791,21 +909,40 @@ async def conduct_research(topic):
         debug_container = st.empty()
         
         # Update UI and check if research should be stopped
-        def researchUpdate(message="", progress_value=None):
-            """Update UI and check if research should be stopped"""
-            if message:
-                status_text.text(message)
-            if progress_value is not None:
-                # Ensure progress value is within valid range [0.0, 1.0]
-                capped_progress = min(1.0, max(0.0, progress_value))
-                progress_bar.progress(capped_progress)
-            # Check if stop has been requested - important for responsiveness
+        def researchUpdate(message, progress_value=None):
+            """
+            Updates the research status with a message and progress value.
+            Returns True if research should stop (based on stop button).
+            """
+            # Check if stop was requested
             if st.session_state.stop_requested:
-                status_text.warning("Research process stopping - completing current operation...")
-                # Don't set research_in_progress to False here, 
-                # it will be set to False in the finally block of conduct_research
+                status_text.warning("Research stopped by user.")
                 return True
-            return False
+            
+            # Validate progress value to ensure it's within range
+            if progress_value is not None:
+                # Ensure progress is between 0 and 1
+                progress_value = max(0.0, min(1.0, progress_value))
+                progress_bar.progress(progress_value)
+            
+            # Process the message for any thinking sections
+            if message and '<think>' in message:
+                formatted_message = parse_thinking_content(message)
+            else:
+                formatted_message = message
+            
+            # Clear the container before adding new content
+            status_text.empty()
+            status_text.markdown(formatted_message, unsafe_allow_html=True)
+            
+            # Update research status
+            st.session_state.research_in_progress = True
+            
+            # Sleep briefly to prevent UI from freezing
+            time.sleep(0.05)
+            
+            # Return whether research should stop
+            return st.session_state.stop_requested
             
         # Initialize search tools based on user configuration
         search_tools = {}
@@ -853,7 +990,7 @@ async def conduct_research(topic):
             llm=llm_jason,
             prompt=PromptTemplate(
                 template=SUBTOPICS_TEMPLATE,
-                input_variables=["topic"]
+                input_variables=["topic", "num_subtopics"]
             )
         )
         
@@ -895,7 +1032,14 @@ async def conduct_research(topic):
             return
             
         try:
-            subtopics_result = (await subtopics_chain.ainvoke({"topic": topic, "num_subtopics": st.session_state.num_subtopics}))["text"]
+            subtopics_result = (await subtopics_chain.ainvoke({
+                "topic": topic, 
+                "num_subtopics": st.session_state.num_subtopics
+            }))["text"]
+            
+            # Clean any thinking tags from the result
+            subtopics_result = clean_thinking_tags(subtopics_result)
+                
             # Clean up the JSON string
             subtopics_result = clean_json_string(subtopics_result)
             
@@ -910,8 +1054,16 @@ async def conduct_research(topic):
             if not isinstance(subtopics, list) or len(subtopics) == 0:
                 raise ValueError("No valid subtopics generated.")
             
-            if researchUpdate(f"Generated {len(subtopics)} subtopics", 0.2):
-                return
+            # Limit subtopics to the user-selected number
+            original_count = len(subtopics)
+            subtopics = subtopics[:st.session_state.num_subtopics]
+            
+            if original_count > st.session_state.num_subtopics:
+                if researchUpdate(f"Generated {original_count} subtopics, using {len(subtopics)} as configured", 0.2):
+                    return
+            else:
+                if researchUpdate(f"Generated {len(subtopics)} subtopics", 0.2):
+                    return
             
         except Exception as e:
             st.error(f"Error generating subtopics: {str(e)}")
@@ -923,7 +1075,7 @@ async def conduct_research(topic):
         main_content = f"# Research: {topic}\n\n## Subtopics\n\n"
         for idx, subtopic in enumerate(subtopics, 1):
             main_content += f"{idx}. {subtopic}\n"
-        write_markdown_file(main_topic_file, main_content)
+        write_markdown_with_thinking(main_topic_file, main_content)
         
         if researchUpdate("Starting subtopic research...", 0.25):
             return
@@ -934,89 +1086,109 @@ async def conduct_research(topic):
         
         # Calculate how much progress to allocate for each subtopic (making sure total doesn't exceed 1.0)
         total_subtopic_progress = 0.55  # Total progress allocation for all subtopics
-        subtopic_start = 0.25  # Starting progress value before subtopics
-        subtopic_count = min(len(subtopics), st.session_state.num_subtopics)
+        subtopic_start = 0.25
+        subtopic_progress_each = total_subtopic_progress / len(subtopics)
+        completed_progress = subtopic_start
         
-        for idx, subtopic in enumerate(subtopics[:st.session_state.num_subtopics], 1):
-            # Calculate exact position in the progress bar range safely
-            current_subtopic_progress = subtopic_start + (total_subtopic_progress * ((idx-1) / subtopic_count))
+        for idx, subtopic in enumerate(subtopics, 1):
+            # Debug container for this subtopic
+            status_text = debug_container.text(f"Researching subtopic {idx}: {subtopic}")
             
-            # Check after each subtopic - critical for responsiveness
-            if researchUpdate(f"Researching subtopic {idx}/{st.session_state.num_subtopics}: {subtopic}", 
-                              current_subtopic_progress):
+            if researchUpdate(f"Researching subtopic {idx}/{len(subtopics)}: {subtopic}", completed_progress):
                 return
             
-            # Research the subtopic with main topic context
-            result, webpage_contents, collected_urls = await research_subtopic(subtopic, search_tools, synthesis_chain, topic, subtopic_status)
-
-            # Calculate progress after completion
-            completed_progress = subtopic_start + (total_subtopic_progress * (idx / subtopic_count))
+            # Research this subtopic
+            result, detailed_results, sources = await research_subtopic(subtopic, search_tools, synthesis_chain, topic, status_text)
             
-            # Check after each subtopic is complete
-            if researchUpdate(f"Completed research on subtopic {idx}", completed_progress):
+            # Update progress after subtopic research
+            subtopic_progress = min(completed_progress + subtopic_progress_each * 0.7, 0.8)
+            if researchUpdate(f"Completed research for subtopic {idx}", subtopic_progress):
                 return
-
-            # Add any collected URLs to all_sources list
-            if collected_urls:
-                all_sources.extend(collected_urls)
             
-            if result:
-                # Create subtopic file
-                subtopic_file = os.path.join(subtopics_dir, f"{sanitize_filename(subtopic)}.md")
-                content = f"# {subtopic}\n\n"
-                
-                # Add detailed webpage content first
-                content += "## Webpage Contents\n\n"
-                for webpage in webpage_contents:
-                    content += f"### URL - {webpage['url']}\n\n"
-                    content += "#### Content\n"
-                    content += f"```\n{webpage['content']}\n```\n\n"
-                
-                # Add subtopic summary
-                content += "## Subtopic Summary\n\n"
-                content += f"{result}\n\n"
-                
-                # Add sources in a more structured format
-                content += "## Sources\n\n"
-                # Group by types for cleaner display
-                web_sources = []
-                wiki_sources = []
-                other_sources = []
-                
-                if collected_urls:
-                    for source in collected_urls:
-                        if source.startswith(('http://', 'https://')):
-                            web_sources.append(source)
-                        elif source.startswith('Wikipedia:'):
-                            wiki_sources.append(source)
-                        else:
-                            other_sources.append(source)
-                
-                # Format and display sources by type
-                if web_sources:
-                    content += "### Web Sources\n"
-                    for idx, url in enumerate(web_sources, 1):
-                        content += f"{idx}. {url}\n"
-                    content += "\n"
+            # Handle case where research was stopped or failed
+            if not result:
+                if st.session_state.stop_requested:
+                    researchUpdate("Research stopped by user", completed_progress + subtopic_progress_each/2)
+                    return
+                else:
+                    if researchUpdate(f"Error researching subtopic {idx}", completed_progress + subtopic_progress_each/2):
+                        return
+                    continue
                     
-                if wiki_sources:
-                    content += "### Wikipedia Sources\n"
-                    for idx, wiki in enumerate(wiki_sources, 1):
-                        content += f"{idx}. {wiki}\n"
-                    content += "\n"
-                    
-                if other_sources:
-                    content += "### Other Sources\n"
-                    for idx, other in enumerate(other_sources, 1):
-                        content += f"{idx}. {other}\n"
-                    content += "\n"
-                
-                write_markdown_file(subtopic_file, content)
-                all_summaries.append({
-                    "subtopic": subtopic,
-                    "summary": result,
-                })
+            # Write subtopic file
+            subtopic_file = os.path.join(subtopics_dir, f"{sanitize_filename(subtopic)}.md")
             
+            # Make sure to parse thinking sections in the result before combining with other content
+            parsed_result = parse_thinking_content(result)
+            
+            content = f"# {subtopic}\n\n{parsed_result}\n\n## Sources\n\n"
+            
+            # Track sources for this subtopic
+            web_sources = []
+            wiki_sources = []
+            other_sources = []
+            
+            # Add URLs to overall source tracking
+            if sources:
+                all_sources.extend(sources)
+                
+                # Categorize sources
+                for source in sources:
+                    if source.startswith(('http://', 'https://')):
+                        web_sources.append(source)
+                    elif source.startswith('Wikipedia:'):
+                        wiki_sources.append(source)
+                    else:
+                        other_sources.append(source)
+            
+            # Add sources to the content
+            if web_sources:
+                content += "### Web Sources\n"
+                for idx, web in enumerate(web_sources, 1):
+                    content += f"{idx}. [{web}]({web})\n"
+                content += "\n"
+                
+            if wiki_sources:
+                content += "### Wikipedia Sources\n"
+                for idx, wiki in enumerate(wiki_sources, 1):
+                    article_title = wiki.replace('Wikipedia:', '').strip()
+                    search_query = article_title.replace(' ', '+')
+                    wiki_url = f"https://en.wikipedia.org/wiki/Special:Search?search={search_query}"
+                    content += f"{idx}. [{article_title}]({wiki_url})\n"
+                content += "\n"
+                
+            if other_sources:
+                content += "### Other Sources\n"
+                for idx, other in enumerate(other_sources, 1):
+                    content += f"{idx}. {other}\n"
+                content += "\n"
+            
+            # Add raw search results data to the file
+            if detailed_results:
+                content += "## Raw Search Results\n\n"
+                for idx, result_data in enumerate(detailed_results, 1):
+                    source_type = result_data.get('source', 'Unknown').capitalize()
+                    url = result_data.get('url', 'No URL provided')
+                    
+                    content += f"### Result {idx} - {source_type}\n\n"
+                    content += f"**Source:** {url}\n\n"
+                    content += "**Content:**\n\n```\n"
+                    # Limit content to a reasonable size
+                    raw_content = result_data.get('content', '')
+                    if len(raw_content) > 10000:
+                        raw_content = raw_content[:10000] + "...\n[Content truncated for readability]"
+                    content += raw_content
+                    content += "\n```\n\n"
+            
+            # Write the file with thinking sections preserved
+            write_markdown_file_with_thinking(subtopic_file, content)
+            
+            # Add to the summaries with thinking sections preserved (don't parse them)
+            all_summaries.append({
+                "subtopic": subtopic,
+                "summary": result,
+            })
+        
             # Update UI after writing files
             file_saved_progress = min(0.8, completed_progress + 0.01)
             if researchUpdate(f"Saved research for subtopic {idx}", file_saved_progress):
@@ -1031,14 +1203,20 @@ async def conduct_research(topic):
                 "topic": topic,
                 "summaries": json.dumps(all_summaries)  # Pass complete summary objects
             }))["text"]
+            
+            # Store the original result with raw thinking tags for file storage (will be properly displayed in UI) 
+            original_result = final_result
+            
+            # Process thinking sections for UI display
+            final_result = parse_thinking_content(final_result)
                 
-            # Write final overview
+            # Write final overview with original content (thinking tags preserved)
             overview_file = os.path.join(research_dir, "research_overview.md")
-            write_markdown_file(overview_file, final_result)
+            write_markdown_with_thinking(overview_file, original_result)
                 
-            # Update session state with results
+            # Update session state with formatted result for UI display
             st.session_state.research_summary = final_result
-            st.session_state.sources = list(dict.fromkeys(all_sources)) 
+            st.session_state.sources = list(dict.fromkeys(all_sources))
                 
                 
         except Exception as e:
@@ -1054,7 +1232,7 @@ async def conduct_research(topic):
         progress_bar.progress(1.0)
         
         # Show success message with directory location
-        st.success(f"Research completed successfully! Results saved to: {research_dir}")
+        # st.success(f"Research completed successfully! Results saved to: {research_dir}")
         
     except Exception as e:
         st.error(f"Research Error: {str(e)}")
@@ -1135,18 +1313,20 @@ with col3:
         st.rerun()
 
 # Display research results
-if st.session_state.research_summary:   
+if st.session_state.research_summary:
     tabs = st.tabs(["📑 Summary", "🔗 Sources", "📂 Files"])
     
     with tabs[0]:
         st.markdown("""
         <div class="research-summary">
         """, unsafe_allow_html=True)
-        st.markdown(st.session_state.research_summary)
+        # Parse the research summary for thinking sections before displaying
+        formatted_summary = parse_thinking_content(st.session_state.research_summary)
+        st.markdown(formatted_summary, unsafe_allow_html=True)
         st.markdown("""
         </div>
         """, unsafe_allow_html=True)
-    
+        
     with tabs[1]:
         if st.session_state.sources:
             st.markdown("### Sources Used in Research")
@@ -1170,7 +1350,7 @@ if st.session_state.research_summary:
                 st.markdown("#### Web Sources")
                 for idx, source in enumerate(web_sources, 1):
                     st.markdown(f"{idx}. [{source}]({source})")
-            
+                    
             # Display Wikipedia sources
             if wiki_sources:
                 st.markdown("#### Wikipedia Sources")
@@ -1247,10 +1427,21 @@ if st.session_state.research_summary:
                             if rel_path == "research_overview.md" or rel_path.count('/') == 0:
                                 with st.expander("Preview Content", expanded=False):
                                     try:
+                                        # Read raw file content
                                         file_content = open(full_path, "r", encoding="utf-8").read()
-                                        # Only show first 500 characters of content as preview
-                                        preview = file_content[:1000] + "..." if len(file_content) > 1000 else file_content
-                                        st.markdown(preview)
+                                        
+                                        # Parse thinking tags for display
+                                        formatted_content = parse_thinking_content(file_content)
+                                        
+                                        # Only show first 2000 characters of content as preview
+                                        max_preview_length = 2000
+                                        preview = formatted_content
+                                        if len(formatted_content) > max_preview_length:
+                                            preview = formatted_content[:max_preview_length] + "..."
+                                            st.info(f"Showing first {max_preview_length} characters. Download the file to see the complete content.")
+                                        
+                                        # Display with HTML allowed for thinking sections
+                                        st.markdown(preview, unsafe_allow_html=True)
                                     except Exception as e:
                                         st.error(f"Error reading file: {str(e)}")
                         

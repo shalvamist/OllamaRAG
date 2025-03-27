@@ -1,6 +1,5 @@
 import streamlit as st
 import time
-from datetime import datetime
 import re
 import os
 from pipelines.defaultRAG import generate_response
@@ -16,7 +15,14 @@ from CommonUtils.chat_db import (
     get_recent_conversations,
     delete_conversation
 )
+
 import ollama
+from CommonUtils.research_utils import (
+    format_thinking_content,
+    parse_thinking_content,
+    THINKING_SECTION_TEMPLATE,
+    THINKING_CSS
+)
 
 # Initialize session state variables
 if 'chatReady' not in st.session_state:
@@ -144,49 +150,10 @@ def save_current_chat(chat_name):
         st.session_state.show_save_dialog = False
         st.rerun()
 
-def format_thinking_content(content):
-    """Format thinking content with markdown code block and italics."""
-    # Clean up the content and ensure proper formatting
-    content = content.strip()
-    # Split content into lines and wrap each line
-    wrapped_content = "\n".join(content.split("\n"))
-    return f'<div class="thinking-text">{wrapped_content}</div>'
-
-# Update the thinking section template
-THINKING_SECTION_TEMPLATE = '''<details class="thinking-details">
-    <summary>💭 Thinking Process</summary>
-    <div class="thinking-content">
-        {content}
-    </div>
-</details>'''
-
+# Replace the duplicated functions with aliases for backward compatibility if needed
 def parse_message_content(content):
-    """Parse message content to ensure consistent formatting of thinking sections."""
-    if '<think>' in content and '</think>' in content:
-        try:
-            parts = content.split('</think>')
-            if len(parts) > 1:
-                pre_think = parts[0].split('<think>')[0].strip()
-                post_think = parts[1].strip()
-                thinking_content = parts[0].split('<think>')[1].strip()
-                
-                # Format thinking section
-                thinking_section = THINKING_SECTION_TEMPLATE.format(
-                    content=format_thinking_content(thinking_content)
-                )
-                
-                # Combine parts with proper spacing
-                if pre_think and post_think:
-                    return f"{pre_think}\n\n{thinking_section}\n\n{post_think}"
-                elif pre_think:
-                    return f"{pre_think}\n\n{thinking_section}"
-                elif post_think:
-                    return f"{thinking_section}\n\n{post_think}"
-                else:
-                    return thinking_section
-        except Exception:
-            return content
-    return content
+    """Alias for parse_thinking_content to maintain backward compatibility."""
+    return parse_thinking_content(content)
 
 # Parse user prompt for @database mentions
 def parse_database_mention(prompt):
@@ -248,73 +215,73 @@ st.set_page_config(
     layout="wide"
 )
 
-# Custom CSS for styling
-st.markdown("""
+# Custom CSS for styling - replace thinking-related CSS with the centralized version
+st.markdown(f"""
 <style>
     /* Main background and text colors */
-    .stApp {
+    .stApp {{
         color: #1a2234;
-    }
+    }}
     
     /* Headers */
-    h1 {
+    h1 {{
         color: #0D47A1 !important;
         margin-bottom: 1rem !important;
         font-size: 2.2em !important;
         font-weight: 800 !important;
-    }
+    }}
     
-    h2 {
+    h2 {{
         color: #1E88E5 !important;
         margin-bottom: 0.8rem !important;
         font-size: 1.8em !important;
         font-weight: 700 !important;
-    }
+    }}
     
-    h3 {
+    h3 {{
         color: #1E88E5 !important;
         margin-bottom: 0.6rem !important;
         font-size: 1.4em !important;
         font-weight: 600 !important;
-    }
+    }}
     
     /* Card styling */
-    [data-testid="stExpander"] {
+    [data-testid="stExpander"] {{
         border: none !important;
         box-shadow: none !important;
-    }
+    }}
     
     /* Buttons */
-    .stButton button {
+    .stButton button {{
         border-radius: 4px;
-    }
+    }}
     
     /* Container borders */
-    [data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlock"] > div[style*="flex-direction: column"] > div[data-testid="stVerticalBlock"] {
+    [data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlock"] > div[style*="flex-direction: column"] > div[data-testid="stVerticalBlock"] {{
         border-radius: 10px;
         padding: 1rem;
-    }
+    }}
     
     /* Card headings */
-    .card-heading {
+    .card-heading {{
         color: #555;
         font-weight: 600;
         font-size: 0.9rem;
         margin-bottom: 0.5rem;
-    }
+    }}
     
     /* Success and warning messages */
-    .stSuccess, .stWarning, .stError, .stInfo {
+    .stSuccess, .stWarning, .stError, .stInfo {{
         border-radius: 4px;
-    }
+    }}
     
     /* Input fields */
-    .stTextInput input, .stNumberInput input, .stTextArea textarea, .stSelectbox select {
+    .stTextInput input, .stNumberInput input, .stTextArea textarea, .stSelectbox select {{
         border-radius: 4px;
-    }
+    }}
 
     /* Chat container */
-    [data-testid="stChatMessageContainer"] {
+    [data-testid="stChatMessageContainer"] {{
         overflow-y: auto !important;
         padding: 1rem 0;
         margin-bottom: 0.5rem;
@@ -325,27 +292,27 @@ st.markdown("""
         background-color: #f9f9f9;
         border-radius: 8px;
         border: 1px solid #e0e0e0;
-    }
+    }}
 
     /* Chat input container */
-    .stChatInputContainer {
+    .stChatInputContainer {{
         position: sticky;
         bottom: 0;
         background: white;
         padding: 1rem 0;
         border-top: 1px solid #e2e8f0;
         z-index: 100;
-    }
+    }}
     
     /* Chat input */
-    .stChatInput {
+    .stChatInput {{
         margin: 0;
         padding: 0.4rem;
         border-radius: 6px;
-    }
+    }}
     
     /* Chat messages */
-    [data-testid="stChatMessage"] {
+    [data-testid="stChatMessage"] {{
         background-color: #f8fafc;
         padding: 0.8rem;
         margin: 0.3rem 0;
@@ -355,80 +322,41 @@ st.markdown("""
         animation: fadeIn 0.3s ease-in-out;
         opacity: 0;
         animation-fill-mode: forwards;
-    }
+    }}
     
     /* User message */
-    [data-testid="stChatMessage"][data-testid="user"] {
+    [data-testid="stChatMessage"][data-testid="user"] {{
         background-color: #e3f2fd;
         border-color: #1E88E5;
         margin-left: auto;
-    }
+    }}
     
     /* Assistant message */
-    [data-testid="stChatMessage"][data-testid="assistant"] {
+    [data-testid="stChatMessage"][data-testid="assistant"] {{
         background-color: #f0f7ff;
         border-color: #0D47A1;
         margin-right: auto;
-    }
+    }}
 
     /* Message animation */
-    @keyframes fadeIn {
-        from {
+    @keyframes fadeIn {{
+        from {{
             opacity: 0;
             transform: translateY(10px);
-        }
-        to {
+        }}
+        to {{
             opacity: 1;
             transform: translateY(0);
-        }
-    }
+        }}
+    }}
 
-    /* Thinking process container styling */
-    .thinking-details {
-        margin: 1em 0;
-        padding: 0.5em;
-        border-radius: 4px;
-        background-color: #f8f9fa;
-        border: 1px solid #e0e0e0;
-    }
-
-    .thinking-content {
-        margin: 1em 0;
-        padding: 1em;
-        background-color: #f1f3f4;
-        border-radius: 4px;
-        border-left: 3px solid #1E88E5;
-    }
-
-    .thinking-text {
-        white-space: pre-wrap;
-        word-wrap: break-word;
-        overflow-wrap: break-word;
-        font-family: monospace;
-        font-size: 0.9em;
-        line-height: 1.5;
-        color: #1a1a1a;
-        max-width: 100%;
-    }
-
-    details > summary {
-        cursor: pointer;
-        padding: 0.5em;
-        border-radius: 4px;
-        font-weight: 500;
-        color: #1E88E5;
-    }
-
-    details > summary:hover {
-        background-color: #e9ecef;
-    }
-
-    details[open] > summary {
-        margin-bottom: 0.5em;
-        border-bottom: 1px solid #dee2e6;
-    }
+    /* Import thinking-related CSS from research_utils */
+    {THINKING_CSS}
 </style>
+""", unsafe_allow_html=True)
 
+# Add JavaScript for auto-scrolling
+st.markdown("""
 <script>
     function autoScroll() {
         const chatContainer = document.querySelector('[data-testid="stChatMessageContainer"]');
@@ -631,31 +559,13 @@ else:
                         
                     if '</think>' in full_response and is_thinking:
                         is_thinking = False
-                        parts = full_response.split('</think>')
-                        if len(parts) > 1:
-                            pre_think = parts[0].split('<think>')[0].strip()
-                            post_think = parts[1].strip()
-                            thinking_content = parts[0].split('<think>')[1].strip()
-                            
-                            # Create expandable thinking section with formatted content
-                            thinking_section = THINKING_SECTION_TEMPLATE.format(
-                                content=format_thinking_content(thinking_content)
-                            )
-                            
-                            # Combine parts with proper spacing
-                            if pre_think and post_think:
-                                final_response = f"{pre_think}\n\n{thinking_section}\n\n{post_think}"
-                            elif pre_think:
-                                final_response = f"{pre_think}\n\n{thinking_section}"
-                            elif post_think:
-                                final_response = f"{thinking_section}\n\n{post_think}"
-                            else:
-                                final_response = thinking_section
-                            
-                            if db_indicator:
-                                message_placeholder.markdown(f"*{db_indicator}*\n\n{final_response}", unsafe_allow_html=True)
-                            else:
-                                message_placeholder.markdown(final_response, unsafe_allow_html=True)
+                        # Use the parse_thinking_content function to handle the thinking section
+                        final_response = parse_thinking_content(full_response)
+                        
+                        if db_indicator:
+                            message_placeholder.markdown(f"*{db_indicator}*\n\n{final_response}", unsafe_allow_html=True)
+                        else:
+                            message_placeholder.markdown(final_response, unsafe_allow_html=True)
                         continue
                     
                     # Normal response handling for non-thinking parts
@@ -672,33 +582,14 @@ else:
                     final_response = full_response
                 
                 if '<think>' in final_response and '</think>' in final_response:
-                    # Clean up any remaining think tags and create final expandable section
-                    parts = final_response.split('</think>')
-                    if len(parts) > 1:
-                        pre_think = parts[0].split('<think>')[0].strip()
-                        post_think = parts[1].strip()
-                        thinking_content = parts[0].split('<think>')[1].strip()
-                        
-                        # Create expandable thinking section with formatted content
-                        thinking_section = THINKING_SECTION_TEMPLATE.format(
-                            content=format_thinking_content(thinking_content)
-                        )
-                        
-                        # Combine parts with proper spacing
-                        if pre_think and post_think:
-                            final_response = f"{pre_think}\n\n{thinking_section}\n\n{post_think}"
-                        elif pre_think:
-                            final_response = f"{pre_think}\n\n{thinking_section}"
-                        elif post_think:
-                            final_response = f"{thinking_section}\n\n{post_think}"
-                        else:
-                            final_response = thinking_section
+                    # Use the parse_thinking_content function to properly format any thinking sections
+                    final_response = parse_thinking_content(final_response)
                 
                 # Add database indicator to stored message
                 if db_indicator:
                     final_message = f"*{db_indicator}*\n\n{final_response}"
                     message_placeholder.markdown(final_message, unsafe_allow_html=True)
-                    st.session_state.messages.append({"role": "assistant", "content": final_message})
+                    st.session_state.messages.append({"role": "assistant", "content": final_response})
                 else:
                     message_placeholder.markdown(final_response, unsafe_allow_html=True)
                     st.session_state.messages.append({"role": "assistant", "content": final_response})
