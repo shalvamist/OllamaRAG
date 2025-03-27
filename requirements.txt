@@ -1,49 +1,48 @@
 # Core dependencies
-streamlit>=1.29.0
-ollama>=0.1.5
-langchain>=0.0.335
-langchain-community>=0.0.16
-langchain-ollama>=0.0.1
+streamlit
+ollama
+langchain
+langchain-community
+langchain-ollama
 
 # Document processing
-chromadb>=0.4.22
-unstructured>=0.10.30
-pypdf>=3.17.1
-pydantic>=2.5.2
-pdf2image>=1.16.3
-pypandoc>=1.12
-python-docx>=1.0.1
-sentence-transformers>=2.2.2
+chromadb
+unstructured
+pypdf
+pydantic
+pdf2image
+pypandoc
+python-docx
+sentence-transformers
 
 # Web tools and research
-wikipedia>=1.4.0
-duckduckgo-search>=3.9.9
-beautifulsoup4>=4.12.2
-requests>=2.31.0
-pyserper>=0.1.5
+wikipedia
+duckduckgo-search
+beautifulsoup4
+requests
 
 # Markdown and text processing
-markdown>=3.5.1
-markdownify>=0.11.6
+markdown
+markdownify
 
 # Utility
-tqdm>=4.66.1
-uuid>=1.30
-aiohttp>=3.9.1
-asyncio>=3.4.3
-numpy>=1.26.2
-pandas>=2.1.3
+tqdm
+uuid
+aiohttp
+asyncio
+numpy
+pandas
 
 # Web page processing tools
-bs4>=0.0.1
-lxml>=4.9.3
+bs4
+lxml
 
 # Database support
-sqlite3-api>=2.0.1
+sqlite3-api
 
 # Visual elements 
-matplotlib>=3.8.2
-plotly>=5.18.0
+matplotlib
+plotly
 
 # Optional: for improved performance
-llama-cpp-python>=0.2.19 
+llama-cpp-python
