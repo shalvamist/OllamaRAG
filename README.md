@@ -12,17 +12,17 @@
 
 ## 🎯 What Can It Do?
 
-- 🤖 **Chat with Your Docs**: Upload PDFs, and your AI buddy will read them for you
-- 🎭 **AI Debate Club**: Watch AI models argue (respectfully) about any topic
-- 🔍 **Research Assistant**: Let AI do the heavy lifting in your research
-- 🧠 **Smart Memory**: Remembers your chats for later (because we all forget sometimes)
+🤖 **Chat with Your Docs**: Upload PDFs, and your AI buddy will read them for you
+🎭 **AI Debate Club**: Watch AI models argue (respectfully) about any topic
+🔍 **Research Assistant**: Let AI do the heavy lifting in your research
+🧠 **Smart Memory**: Remembers your chats for later (because we all forget sometimes)
 
 ## 🚀 Get Started in 5 Minutes!
 
 ### 1. First Things First
-- Install [Python 3.8+](https://python.org)
-- Get [Ollama](https://ollama.ai) running on your machine
-- Download a model (we recommend): `ollama pull mistral`
+Install [Python 3.8+](https://python.org)
+Get [Ollama](https://ollama.ai) running on your machine
+Download a model (we recommend): `ollama pull mistral`
 
 ### 2. Clone & Setup
 ```bash
