@@ -4,6 +4,7 @@ import json
 from urllib.parse import urlparse
 from bs4 import SoupStrainer
 from langchain_community.document_loaders import WebBaseLoader
+import streamlit as st
 
 # Research prompt templates
 SEARCH_QUERY_TEMPLATE = """
@@ -372,20 +373,10 @@ def write_markdown_with_thinking(file_path, content):
 
 async def fetch_and_process_url(url: str, debug_container) -> str:
     """Fetch and process content from a URL using WebBaseLoader with BeautifulSoup strainer."""
-    try:
-        # Check if research has been stopped (access session state)
-        import streamlit as st
+    try:       
         if 'stop_requested' in st.session_state and st.session_state.stop_requested:
             debug_container.warning(f"Skipping URL processing - research stopped: {url}")
             return ""
-            
-        # Validate URL
-        parsed_url = urlparse(url)
-        if not all([parsed_url.scheme, parsed_url.netloc]):
-            debug_container.warning(f"Invalid URL: {url}")
-            return ""
-
-        bs4_strainer = SoupStrainer(class_=("content-area"))
         
         # Initialize WebBaseLoader with BeautifulSoup configuration
         loader = WebBaseLoader(
@@ -400,25 +391,15 @@ async def fetch_and_process_url(url: str, debug_container) -> str:
                 
             # Use synchronous loading as aload() might not work well with bs_kwargs
             docs = loader.load()
-            
-            # Check again if research has been stopped after loading
-            if 'stop_requested' in st.session_state and st.session_state.stop_requested:
-                debug_container.warning(f"Discarding loaded content - research stopped: {url}")
-                return ""
                 
             if not docs:
-                # Fallback to loading without strainer if no content found
+                # Try loading without BeautifulSoup
                 loader = WebBaseLoader(
                     web_paths=[url],
                     verify_ssl=True,
                     continue_on_failure=True,
                     requests_per_second=2
                 )
-                
-                # Check again if research has been stopped before retrying load
-                if 'stop_requested' in st.session_state and st.session_state.stop_requested:
-                    debug_container.warning(f"Skipping content retry - research stopped: {url}")
-                    return ""
                     
                 docs = loader.load()
                 if not docs:
@@ -431,7 +412,11 @@ async def fetch_and_process_url(url: str, debug_container) -> str:
             # Clean up the content
             content = re.sub(r'\s+', ' ', content).strip()  # Remove excessive whitespace
             content = re.sub(r'[^\x00-\x7F]+', '', content)  # Remove non-ASCII characters
-
+            
+            # Display success message
+            debug_container.success(f"Content retrieved from: {url}")
+            debug_container.empty()
+            
             return content
 
         except Exception as e:
@@ -487,3 +472,97 @@ def clean_json_string(json_str: str) -> str:
         json_str = re.sub(r',(\s*[}\]])', r'\1', json_str)
         
         return json_str.strip() 
+
+
+# Function to write markdown file - wrapper to handle thinking sections correctly
+def write_markdown_file_with_thinking(file_path, content):
+    """Wrapper around write_markdown_with_thinking to maintain backward compatibility."""
+    return write_markdown_with_thinking(file_path, content)
+
+async def perform_web_search(search_tool, query, status_text):
+    """
+    Performs a web search using the provided search tool and processes the results.
+    
+    Args:
+        search_tool: The search tool to use (e.g., DuckDuckGo)
+        query: The search query
+        status_text: Streamlit text element for status updates
+        
+    Returns:
+        list: List of dictionaries containing processed search results
+    """
+    detailed_results = []
+    
+    try:
+        search_results = search_tool.run(query)
+        urls = re.findall(r'https?://[^\s<>"]+|www\.[^\s<>"]+', search_results)
+        status_text.text(f"Found URLs from search: {urls}")
+        
+        for url in urls:
+            try:
+                status_text.text(f"Processing URL: {url}")
+                content = await fetch_and_process_url(url, status_text)
+                if content:
+                    detailed_results.append({
+                        "url": url,
+                        "content": content,
+                        "source": "web"
+                    })
+            except Exception as e:
+                status_text.warning(f"Error processing URL {url}: {str(e)}")
+                
+    except Exception as e:
+        status_text.warning(f"Web search error: {str(e)}")
+        
+    return detailed_results
+
+async def perform_google_search(search_tool, query, search_type, status_text):
+    """
+    Performs a Google search using Serper API and processes the results.
+    
+    Args:
+        search_tool: The GoogleSerperAPIWrapper instance
+        query: The search query
+        search_type: Type of search ('search', 'news', or 'images')
+        status_text: Streamlit text element for status updates
+        
+    Returns:
+        list: List of dictionaries containing processed search results
+    """
+    detailed_results = []
+    try:
+        google_results = search_tool.results(query)
+        google_urls = []
+        
+        if search_type == 'search':
+            if 'organic' in google_results:
+                google_urls = [item['link'] for item in google_results['organic'] if 'link' in item]
+            if 'knowledgeGraph' in google_results and 'descriptionLink' in google_results['knowledgeGraph']:
+                google_urls.append(google_results['knowledgeGraph']['descriptionLink'])
+        elif search_type == 'news':
+            if 'news' in google_results:
+                google_urls = [item['link'] for item in google_results['news'] if 'link' in item]
+        elif search_type == 'images':
+            if 'images' in google_results:
+                google_urls = [item['link'] for item in google_results['images'] if 'link' in item]
+        
+        status_text.text(f"Found URLs from Google Serper search: {google_urls}")
+        
+        for url in google_urls:
+            try:
+                status_text.text(f"Processing Google Serper URL: {url}")
+                content = await fetch_and_process_url(url, status_text)
+                if content:
+                    detailed_results.append({
+                        "url": url,
+                        "content": content,
+                        "source": f"google_{search_type}"
+                    })
+            except Exception as e:
+                status_text.warning(f"Error processing Google URL {url}: {str(e)}")
+                
+    except Exception as e:
+        status_text.warning(f"Google Serper search error: {str(e)}")
+        
+    return detailed_results
+

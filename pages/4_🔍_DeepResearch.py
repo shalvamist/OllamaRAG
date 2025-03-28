@@ -15,6 +15,10 @@ import re
 import shutil  
 import time
 
+# Import necessary RAG utilities
+from CommonUtils.rag_utils import SOURCE_PATH, get_client
+import pypandoc
+
 # Import utility functions from CommonUtils
 from CommonUtils.research_utils import (
     sanitize_filename,
@@ -29,17 +33,11 @@ from CommonUtils.research_utils import (
     clean_thinking_tags,
     parse_thinking_content,
     THINKING_CSS,
-    write_markdown_with_thinking
+    write_markdown_with_thinking,
+    write_markdown_file_with_thinking,
+    perform_web_search,
+    perform_google_search
 )
-
-# Import necessary RAG utilities
-from CommonUtils.rag_utils import SOURCE_PATH, get_client
-import pypandoc
-
-# Function to write markdown file - wrapper to handle thinking sections correctly
-def write_markdown_file_with_thinking(file_path, content):
-    """Wrapper around write_markdown_with_thinking to maintain backward compatibility."""
-    return write_markdown_with_thinking(file_path, content)
 
 # Set page config
 st.set_page_config(
@@ -163,8 +161,10 @@ if 'databases' not in st.session_state:
     st.session_state.databases = {}
 if 'available_databases' not in st.session_state:
     st.session_state.available_databases = []
+if 'min_results' not in st.session_state:
+    st.session_state.min_results = 3
 
-# Title and description
+# Page Title and description
 st.markdown("""
 <h1 style="text-align: center; color: #0D47A1; margin-bottom: 20px;">🔍 Deep Research Assistant</h1>
 """, unsafe_allow_html=True)
@@ -323,8 +323,6 @@ with st.sidebar:
             st.markdown(f"**Current Iteration:** {st.session_state.iteration_count}")
             if len(st.session_state.sources) > 0:
                 st.markdown(f"**Sources Found:** {len(st.session_state.sources)}")
-
-# Note: All prompt templates have been moved to CommonUtils/research_utils.py
 
 # Function to handle research stopping
 def stop_research():
@@ -624,12 +622,10 @@ async def research_subtopic(subtopic, search_tools, synthesis_chain, main_topic,
             
             # Generate contextual search query
             search_query_result = (await search_query_chain.ainvoke({"main_topic": main_topic, "topic": subtopic}))["text"]
-            
             # Process thinking sections for display while keeping original for clean query
             formatted_query = parse_thinking_content(search_query_result)
             # Clean for actual search use
             search_query = clean_thinking_tags(search_query_result)
-            
             # Debug search query - show with thinking sections parsed for display
             status_text.markdown(f"Search attempt {search_attempt}/{max_search_attempts} for: {formatted_query}", unsafe_allow_html=True)
             
@@ -637,126 +633,32 @@ async def research_subtopic(subtopic, search_tools, synthesis_chain, main_topic,
             
             # Perform web searches based on enabled providers
             if search_tools.get('web') and not st.session_state.stop_requested:
-                status_text.text("Performing DuckDuckGo web search...")
-                try:
-                    # Important: Search query must be clean of thinking tags before sending to search provider
-                    clean_query = clean_thinking_tags(search_query)
-                    search_results = search_tools['web'].run(clean_query)  
-                    urls = re.findall(r'https?://[^\s<>"]+|www\.[^\s<>"]+', search_results)
-                    status_text.text(f"Found URLs from web search: {urls}")
-                    
-                    # Process web URLs
-                    for url in urls:
-                        try:
-                            status_text.text(f"Processing URL: {url}")
-                            content = await fetch_and_process_url(url, status_text)
-                            if content:
-                                detailed_results.append({
-                                    "url": url,
-                                    "content": content,
-                                    "source": "web"
-                                })
-                        except Exception as e:
-                            status_text.warning(f"Error processing URL {url}: {str(e)}")
-                except Exception as e:
-                    status_text.warning(f"DuckDuckGo web search error: {str(e)}")
+                status_text.text("Performing DuckDuckGo web search")
+                web_results = await perform_web_search(search_tools['web'], search_query, status_text)
+                detailed_results.extend(web_results)
             
-            # Perform news search if enabled
+            # Perform web news searches based on enabled providers
             if search_tools.get('news') and not st.session_state.stop_requested:
-                status_text.text("Performing DuckDuckGo news search...")
-                try:
-                    # Important: Search query must be clean of thinking tags before sending to search provider
-                    clean_query = clean_thinking_tags(search_query)
-                    news_results = search_tools['news'].run(clean_query)
-                    news_urls = re.findall(r'https?://[^\s<>"]+|www\.[^\s<>"]+', news_results)
-                    status_text.text(f"Found URLs from news search: {news_urls}")
-                    
-                    # Process news URLs
-                    for url in news_urls:
-                        try:
-                            status_text.text(f"Processing news URL: {url}")
-                            content = await fetch_and_process_url(url, status_text)
-                            if content:
-                                detailed_results.append({
-                                    "url": url,
-                                    "content": content,
-                                    "source": "news"
-                                })
-                        except Exception as e:
-                            status_text.warning(f"Error processing news URL {url}: {str(e)}")
-                except Exception as e:
-                    status_text.warning(f"DuckDuckGo news search error: {str(e)}")
+                status_text.text("Performing DuckDuckGo news search")
+                web_results = await perform_web_search(search_tools['news'], search_query, status_text)
+                detailed_results.extend(web_results)
             
             # Get Google Serper results if enabled
             if search_tools.get('google_serper') and not st.session_state.stop_requested:
                 status_text.text(f"Performing Google Serper {search_tools['google_serper_type']} search...")
-                
-                try:
-                    # Get the search results with full metadata - use clean query
-                    clean_query = clean_thinking_tags(search_query)
-                    google_results = search_tools['google_serper'].results(clean_query)
-                    
-                    # Extract URLs based on the search type
-                    google_urls = []
-                    
-                    if search_tools['google_serper_type'] == 'search':
-                        # Extract URLs from organic search results
-                        if 'organic' in google_results:
-                            google_urls = [item['link'] for item in google_results['organic'] if 'link' in item]
-                        
-                        # Add knowledge graph URL if available
-                        if 'knowledgeGraph' in google_results and 'descriptionLink' in google_results['knowledgeGraph']:
-                            google_urls.append(google_results['knowledgeGraph']['descriptionLink'])
-                    
-                    elif search_tools['google_serper_type'] == 'news':
-                        # Extract URLs from news results
-                        if 'news' in google_results:
-                            google_urls = [item['link'] for item in google_results['news'] if 'link' in item]
-                    
-                    elif search_tools['google_serper_type'] == 'images':
-                        # Extract source URLs from image results
-                        if 'images' in google_results:
-                            google_urls = [item['link'] for item in google_results['images'] if 'link' in item]
-                    
-                    status_text.text(f"Found URLs from Google Serper search: {google_urls}")
-                    
-                    # Process Google URLs
-                    for url in google_urls:
-                        try:
-                            status_text.text(f"Processing Google Serper URL: {url}")
-                            content = await fetch_and_process_url(url, status_text)
-                            if content:
-                                detailed_results.append({
-                                    "url": url,
-                                    "content": content,
-                                    "source": f"google_{search_tools['google_serper_type']}"
-                                })
-                        except Exception as e:
-                            status_text.warning(f"Error processing Google URL {url}: {str(e)}")
-                except Exception as e:
-                    status_text.warning(f"Google Serper search error: {str(e)}")
-            
-            # Get Wikipedia results if enabled
+                google_results = await perform_google_search(
+                    search_tools['google_serper'],
+                    clean_thinking_tags(search_query),
+                    search_tools['google_serper_type'],
+                    status_text
+                )
+                detailed_results.extend(google_results)
+
+            # Perform Wikipedia searches based on enabled providers
             if search_tools.get('wikipedia') and not st.session_state.stop_requested:
-                status_text.text("Retrieving Wikipedia results...")
-                try:
-                    # Use clean query for Wikipedia search
-                    clean_query = clean_thinking_tags(search_query)
-                    wikipedia_results = search_tools['wikipedia'].get_relevant_documents(clean_query)
-                    
-                    # Process Wikipedia results
-                    for wiki_doc in wikipedia_results:
-                        try:
-                            wiki_title = wiki_doc.metadata.get('title', 'Unknown Article')
-                            detailed_results.append({
-                                "url": f"Wikipedia: {wiki_title}",
-                                "content": wiki_doc.page_content,
-                                "source": "wikipedia"
-                            })
-                        except Exception as e:
-                            status_text.warning(f"Error processing Wikipedia article {wiki_doc.metadata.get('title', 'Unknown')}: {str(e)}")
-                except Exception as e:
-                    status_text.warning(f"Wikipedia search error: {str(e)}")
+                status_text.text("Performing Wikipedia search")
+                web_results = await perform_web_search(search_tools['wikipedia'], search_query, status_text)
+                detailed_results.extend(web_results)
             
             # Combine search results with detailed content
             combined_results = []
@@ -809,9 +711,9 @@ async def research_subtopic(subtopic, search_tools, synthesis_chain, main_topic,
                             # If no direct sufficient flag but has score, use score threshold
                             is_sufficient = eval_data["quality_score"] >= 5
                         else:
-                            # If we can't determine, assume it's sufficient to include
-                            is_sufficient = True
-                            status_text.warning(f"Could not determine sufficiency from evaluation result, including content anyway")
+                            # If we can't determine, assume it's NOT sufficient to include
+                            is_sufficient = False
+                            status_text.warning(f"Could not determine sufficiency from evaluation result, Not including content")
                         
                         # Check if results are sufficient
                         if is_sufficient:
@@ -842,6 +744,9 @@ async def research_subtopic(subtopic, search_tools, synthesis_chain, main_topic,
                         Source: {result['source']}
                         Content: {result['content']}""".strip())
                     continue
+            # check if we got enought results
+            if len(combined_results) >= st.session_state.min_results:
+                break
                 
         # Check if stop was requested
         if st.session_state.stop_requested:
@@ -851,23 +756,7 @@ async def research_subtopic(subtopic, search_tools, synthesis_chain, main_topic,
         # After all search attempts, check if we've found any results
         if not combined_results and not collected_urls:
             status_text.warning(f"No sufficient data found for subtopic '{subtopic}' after {max_search_attempts} search attempts")
-            
-            # If we have detailed results but no combined results (all were filtered out), use them anyway
-            if detailed_results:
-                status_text.text("Using all available results despite evaluation")
-                combined_results = detailed_results
-                collected_urls = [result['url'] for result in detailed_results if 'url' in result]
-                summaries_subtopic = []
-                
-                for result in detailed_results:
-                    summaries_subtopic.append(f"""
-URL: {result['url']}
-Source: {result['source']}
-Content: {result['content']}
-                    """.strip())
-            else:
-                # If no results found at all
-                return None, None, None
+            return None, None, None
             
         status_text.text(f"Synthesizing findings for {subtopic}")
         
@@ -977,7 +866,7 @@ async def conduct_research(topic):
             num_ctx=st.session_state.contextWindow,
             num_predict=st.session_state.newMaxTokens
         )
-
+        # LLM for JSON output
         llm_jason = OllamaLLM(
             model=st.session_state.ollama_model,
             temperature=st.session_state.temperature,
