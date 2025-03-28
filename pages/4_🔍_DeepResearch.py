@@ -4,9 +4,9 @@ from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
 
 from langchain_community.tools import DuckDuckGoSearchResults
-from langchain_community.document_loaders import WebBaseLoader
 from langchain_community.retrievers import WikipediaRetriever
 from langchain_community.utilities import GoogleSerperAPIWrapper
+from langchain_community.utilities import ArxivAPIWrapper
 
 import os
 import asyncio
@@ -36,7 +36,8 @@ from CommonUtils.research_utils import (
     write_markdown_with_thinking,
     write_markdown_file_with_thinking,
     perform_web_search,
-    perform_google_search
+    perform_google_search,
+    perform_arxiv_search,
 )
 
 # Set page config
@@ -268,6 +269,8 @@ with st.sidebar:
                                         help="Search the general web for information via DuckDuckGo")
             use_wikipedia = st.checkbox("Wikipedia", value=True,
                                       help="Search Wikipedia for well-established information")
+            use_arxiv = st.checkbox("arXiv Papers", value=True,
+                                   help="Search academic papers on arXiv")
         
         with col2:
             use_duckduckgo_news = st.checkbox("DuckDuckGo News", value=True,
@@ -660,6 +663,12 @@ async def research_subtopic(subtopic, search_tools, synthesis_chain, main_topic,
                 web_results = await perform_web_search(search_tools['wikipedia'], search_query, status_text)
                 detailed_results.extend(web_results)
             
+            # Perform arXiv searches based on enabled providers
+            if search_tools.get('arxiv') and not st.session_state.stop_requested:
+                status_text.text("Performing arXiv search")
+                arxiv_results = await perform_arxiv_search(search_tools['arxiv'], search_query, status_text)
+                detailed_results.extend(arxiv_results)
+            
             # Combine search results with detailed content
             combined_results = []
             summaries_subtopic = []
@@ -787,6 +796,9 @@ async def conduct_research(topic):
     3. Synthesize findings
     4. Create final synthesis
     """
+    # Set research in progress to True
+    st.session_state.research_in_progress = True
+    
     try:
         # Store the research topic in session state for recovery after stop/restart
         st.session_state.current_research_topic = topic
@@ -841,6 +853,8 @@ async def conduct_research(topic):
             search_tools['news'] = DuckDuckGoSearchResults(backend="news")
         if use_wikipedia:
             search_tools['wikipedia'] = WikipediaRetriever()
+        if use_arxiv:
+            search_tools['arxiv'] = ArxivAPIWrapper()
         
         # Add Google Serper if enabled and API key is provided
         if use_google_serper and st.session_state.serper_api_key:
@@ -1120,9 +1134,6 @@ async def conduct_research(topic):
         # Ensure the progress bar is exactly at 100%
         progress_bar.progress(1.0)
         
-        # Show success message with directory location
-        # st.success(f"Research completed successfully! Results saved to: {research_dir}")
-        
     except Exception as e:
         st.error(f"Research Error: {str(e)}")
     finally:
@@ -1168,6 +1179,9 @@ with col1:
             # Store research topic for potential recovery
             st.session_state.current_research_topic = research_topic 
             asyncio.run(conduct_research(research_topic))
+
+            # Set research in progress to False
+            st.session_state.research_in_progress = False
             
             # Check if research was stopped - provide feedback
             if st.session_state.stop_requested:
@@ -1178,7 +1192,7 @@ with col1:
 with col2:
     stop_button = st.button(
         "⏹️ Stop", 
-        disabled=not st.session_state.research_in_progress,
+        # disabled=not st.session_state.research_in_progress,
         use_container_width=True,
         type="secondary"
     )

@@ -1,8 +1,6 @@
 import os
 import re
 import json
-from urllib.parse import urlparse
-from bs4 import SoupStrainer
 from langchain_community.document_loaders import WebBaseLoader
 import streamlit as st
 
@@ -563,6 +561,43 @@ async def perform_google_search(search_tool, query, search_type, status_text):
                 
     except Exception as e:
         status_text.warning(f"Google Serper search error: {str(e)}")
+        
+    return detailed_results
+
+async def perform_arxiv_search(search_tool, query, status_text):
+    """
+    Performs an arXiv search and processes the results.
+    
+    Args:
+        search_tool: The ArxivAPIWrapper instance
+        query: The search query
+        status_text: Streamlit text element for status updates
+        
+    Returns:
+        list: List of dictionaries containing processed search results
+    """
+    detailed_results = []
+    try:
+        status_text.text("Searching arXiv papers...")
+        papers = search_tool.run(query)
+        
+        for paper in papers.split('\n'):
+            if paper.strip() and 'arxiv.org' in paper:
+                try:
+                    url = paper.strip()
+                    status_text.text(f"Processing arXiv paper: {url}")
+                    content = await fetch_and_process_url(url, status_text)
+                    if content:
+                        detailed_results.append({
+                            "url": url,
+                            "content": content,
+                            "source": "arxiv"
+                        })
+                except Exception as e:
+                    status_text.warning(f"Error processing arXiv paper {url}: {str(e)}")
+                    
+    except Exception as e:
+        status_text.warning(f"arXiv search error: {str(e)}")
         
     return detailed_results
 

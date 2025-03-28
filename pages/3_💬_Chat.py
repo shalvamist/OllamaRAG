@@ -21,12 +21,16 @@ from CommonUtils.research_utils import (
     format_thinking_content,
     parse_thinking_content,
     THINKING_SECTION_TEMPLATE,
-    THINKING_CSS
+    THINKING_CSS,
+    perform_web_search
 )
 
 # Initialize session state variables
 if 'chatReady' not in st.session_state:
     st.session_state.chatReady = False
+
+if 'web_search_enabled' not in st.session_state:
+    st.session_state.web_search_enabled = False
 
 if 'ollama_model' not in st.session_state:
     st.session_state.ollama_model = None
@@ -511,14 +515,29 @@ else:
                 final_response = ""
                 has_thinking = False
                 
+                # Add web search if enabled
+                web_results = []
+                if st.session_state.web_search_enabled:
+                    with st.spinner("Searching the web..."):
+                        try:
+                            from langchain_community.utilities import DuckDuckGoSearchAPIWrapper
+                            search = DuckDuckGoSearchAPIWrapper()
+                            results = search.run(cleaned_prompt)
+                            if results:
+                                web_results = [{"url": "DuckDuckGo Search", "content": results}]
+                                web_context = results
+                                cleaned_prompt = f"Web search results:\n{web_context}\n\nUser question: {cleaned_prompt}"
+                        except Exception as e:
+                            st.warning(f"Web search failed: {str(e)}")
+                
                 # Stream the response
                 for chunk in generate_response(
                     cleaned_prompt,  # Use cleaned prompt without @mention
                     collection_to_use,  # Use specific collection if mentioned
                     use_rag,  # Enable RAG if collection available
-                    st.session_state.system_prompt,
+                    st.session_state.system_prompt + ("\n\nWhen web search results are provided, use them to enhance your response and cite the sources when appropriate." if st.session_state.web_search_enabled else ""),
                     st.session_state.llm,
-                    st.session_state.BM25retriver,
+                    None,
                     int(st.session_state.dbRetrievalAmount)
                 ):
                     full_response += chunk
@@ -602,6 +621,17 @@ else:
         ⚙️ Chat Settings
         </h2>
         """, unsafe_allow_html=True)
+        
+        # Web Search Toggle - Add this section first
+        with st.expander("🔍 Web Search", expanded=False):
+            st.session_state.web_search_enabled = st.toggle("Enable Web Search", 
+                value=st.session_state.web_search_enabled,
+                help="When enabled, the chat will search the web for relevant information")
+            if st.session_state.web_search_enabled:
+                st.success("Web search is enabled")
+                st.info("The assistant will search the web for relevant information when answering questions")
+            else:
+                st.info("Web search is disabled")
         
         # Model Status Section - Collapsable
         with st.expander("🤖 Model Status", expanded=False):
