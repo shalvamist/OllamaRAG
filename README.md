@@ -8,51 +8,8 @@
 [![Made for Local LLMs](https://img.shields.io/badge/Made%20for-Local%20LLMs-blue?style=for-the-badge&logo=robot&logoColor=white)](https://ollama.ai)
 [![Built with Streamlit](https://img.shields.io/badge/Built%20with-Streamlit-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)](https://streamlit.io)
 
-> Ever wanted to chat with multiple AI personalities about your documents? Well, now you can! And the best part? It's all happening on your machine. No data leaves your computer! 🔒
-
-## 🎯 What Can It Do?
-
-🤖 **Chat with Your Docs**: Upload PDFs, and your AI buddy will read them for you
-🎭 **AI Debate Club**: Watch AI models argue (respectfully) about any topic
-🔍 **Research Assistant**: Let AI do the heavy lifting in your research
-🧠 **Smart Memory**: Remembers your chats for later (because we all forget sometimes)
-
-## 🚀 Get Started in 5 Minutes!
-
-### 1. First Things First
-Install [Python 3.8+](https://python.org)
-Get [Ollama](https://ollama.ai) running on your machine
-Download a model (we recommend): `ollama pull mistral`
-
-### 2. Clone & Setup
-```bash
-# Clone this bad boy
-git clone [repository-url]
-cd OllamaRAG
-
-# Create your virtual playground
-python -m venv venv
-
-# Activate the magic
-# For Windows folks:
-.\venv\Scripts\activate
-# For Unix cool kids:
-source venv/bin/activate
-
-# Install the goodies
-pip install -r requirements.txt
-```
-
-### 3. Launch! 🚀
-```bash
-streamlit run Home.py
-```
-
-## 🎮 Quick Tips
-
-- 💡 **First Time?** Start with the Chat tab - it's the friendliest!
-- 🎯 **Pro Move:** Try the AI Debate feature with controversial topics (like "Is a hotdog a sandwich?")
-- 📚 **Document Tips:** Smaller PDFs work better (we're working on handling the big ones)
+**Your Personal AI Research & Debate Assistant**  
+_Local. Private. Powerful._
 
 ---
 
@@ -68,6 +25,12 @@ streamlit run Home.py
 [🛠️ Setup Guide](#-quick-start) •
 [📘 Documentation](https://github.com/yourusername/OllamaRAG/wiki)
 
+</div>
+
+> Supercharge your local LLMs with powerful RAG capabilities! Transform your research, spark engaging AI debates, and unlock the full potential of your documents - all while keeping your data private.
+
+OllamaRAG is your all-in-one solution for document-enhanced AI conversations, research automation, and interactive AI debates - all running locally on your machine!
+
 ## ✨ Key Features
 
 - 🏠 **100% Local Processing** - Complete data privacy with local LLM integration
@@ -76,6 +39,29 @@ streamlit run Home.py
 - 💬 **RAG-Enhanced Chat** - Context-aware conversations using your documents
 - 📊 **Intelligent Processing** - Advanced document chunking and hybrid search
 - 💾 **Persistent Memory** - Save and manage conversations across sessions
+
+## 🚀 Quick Start
+
+### Prerequisites
+- Python 3.8+
+- [Ollama](https://ollama.ai) installed and running
+
+### Setup
+```bash
+# Clone and enter directory
+git clone [repository-url]
+cd OllamaRAG
+
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # or .\venv\Scripts\activate on Windows
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the app
+streamlit run Home.py
+```
 
 ## 🎯 Main Components
 
@@ -95,6 +81,11 @@ streamlit run Home.py
 ## 📝 License
 
 MIT License - Free to use, modify, and distribute. No liability or warranty provided.
+
+---
+[Explore Features](https://github.com/yourusername/OllamaRAG#features) · 
+[Report Bug](https://github.com/yourusername/OllamaRAG/issues) · 
+[Request Feature](https://github.com/yourusername/OllamaRAG/issues)
 
 ## Features in Detail
 
@@ -159,6 +150,7 @@ This project is built upon the amazing work of several open-source projects:
 - [Streamlit](https://streamlit.io/) - For their excellent web application framework
 - [LangChain](https://www.langchain.com/) - For comprehensive LLM tools and utilities
 - [ChromaDB](https://www.trychroma.com/) - For the efficient vector database implementation
+- [Langchain-Ollama](https://python.langchain.com/docs/integrations/llms/ollama) - For seamless Ollama integration with LangChain
 
 ## Troubleshooting
 
