@@ -66,7 +66,7 @@ RESPONSE:"""
 
 SUBTOPIC_SUMMARY_TEMPLATE = """
 Analyze and summarize the research findings for this topic. 
-This should be a detailed summary of the findings aim to be 4-5 paragraphs (4-5 sentences per paragraph).
+This should be a detailed summary of the findings aim to be 4-5 paragraphs (4-5 sentences per paragraph, ~150 words per paragraph).
 
 TOPIC: {topic}
 SEARCH_RESULTS: {results}
@@ -105,7 +105,7 @@ Second insight - should be 4-5 sentences
 
 FINAL_SYNTHESIS_TEMPLATE = """
 Analyze and summarize the research findings for this topic, Create a comprehensive research overview based on all subtopic summaries.
-This should be a detailed summary of the findings aim to be 4-5 paragraphs (4-5 sentences per paragraph).
+This should be a detailed summary of the findings aim to be 4-5 paragraphs (5-7 sentences per paragraph, ~250 words per paragraph).
 
 TOPIC: {topic}
 SUBTOPIC_SUMMARIES: {summaries}
@@ -158,48 +158,83 @@ REQUIREMENTS:
 
 RESPONSE:"""
 
+WEBSEARCH_QUERY_TEMPLATE = """
+Generate a search query for web research.
+
+TOPIC: {topic}
+
+INSTRUCTIONS:
+1. Create a search query that is relevant to the conversation topic
+2. Return ONLY the search query as plain text
+3. NO JSON, NO explanations, NO formatting
+4. Keep it under 15 words
+5. Make it specific and focused
+
+BAD EXAMPLES:
+- {{\"query\": \"quantum computing basics\"}}
+- "quantum computing applications"
+- <thinking>Let me generate...</thinking>   
+
+GOOD EXAMPLES:
+- quantum computing cryptography applications in cybersecurity
+- artificial intelligence machine learning applications healthcare diagnosis
+- renewable energy solar power efficiency improvements residential systems
+
+YOUR QUERY:"""
+
 SEARCH_RESULTS_EVALUATION_TEMPLATE = """
-Evaluate the quality and relevance of these search results.
+You are a search results evaluator. Your task is to evaluate the quality and correlation of search results.
 
 TOPIC: {topic}
 SEARCH_RESULTS: {results}
 
 INSTRUCTIONS:
-1. Analyze the provided content for:
-   - Relevance to the topic
-   - Information density
-   - Quality of sources
-   - Comprehensiveness
-2. Return ONLY a JSON object with your evaluation
-3. If the results are not relevant or comprehensive, return false for sufficient_data
-4. If the results are relevant and comprehensive, return true for sufficient_data
-5. Rate the quality of the results from 0-10
-6. Provide 2 reasons for your assessment
+1. Analyze the content carefully
+2. Return ONLY a valid JSON object
+3. Follow the exact structure below
+4. Do not include any additional text or explanations
+5. Ensure all JSON values are properly quoted
+6. Use only double quotes for JSON properties
 
-YOUR RESPONSE MUST BE A VALID JSON OBJECT WITH THIS EXACT STRUCTURE:
+REQUIRED JSON STRUCTURE:
 {{
-    "sufficient_data": true/false,
-    "quality_score": 0-10,
+    "sufficient_data": true,
+    "quality_score": 8,
+    "confidence_score": 7,
+    "source_correlation": {{
+        "high_correlation": [
+            "Fact 1 that appears in multiple sources",
+            "Fact 2 that appears in multiple sources"
+        ],
+        "partial_correlation": [
+            "Fact with partial support"
+        ],
+        "uncorroborated": [
+            "Single source fact"
+        ]
+    }},
+    "source_credibility": {{
+        "high_credibility": [
+            "example.com"
+        ],
+        "medium_credibility": [
+            "example.org"
+        ],
+        "low_credibility": [
+            "example.net"
+        ]
+    }},
     "reasons": [
         "Reason 1 for assessment",
         "Reason 2 for assessment"
     ],
     "missing_aspects": [
-        "Important aspect not covered 1",
-        "Important aspect not covered 2"
+        "Missing aspect 1",
+        "Missing aspect 2"
     ]
 }}
 
-REQUIREMENTS:
-1. sufficient_data: Set to true only if results are both relevant and comprehensive (MUST USE THIS EXACT KEY NAME)
-2. quality_score: Rate from 0-10 where:
-   - 0-3: Poor quality/irrelevant
-   - 4-6: Moderate quality but incomplete
-   - 7-10: High quality and comprehensive
-3. Include at least 2 reasons for your assessment
-4. List missing aspects if quality_score < 7
-
-RESPONSE:"""
+RESPONSE (VALID JSON ONLY):"""
 
 # Thinking Section Template - Used for displaying thinking sections in the UI
 THINKING_SECTION_TEMPLATE = '''<details class="thinking-details">
@@ -350,6 +385,11 @@ def write_markdown_file(filepath, content):
     with open(filepath, 'w', encoding='utf-8') as f:
         f.write(content)
 
+# Function to write markdown file - wrapper to handle thinking sections correctly
+def write_markdown_file_with_thinking(file_path, content):
+    """Wrapper around write_markdown_with_thinking to maintain backward compatibility."""
+    return write_markdown_with_thinking(file_path, content)
+
 def write_markdown_with_thinking(file_path, content):
     """
     Writes markdown content to a file, preserving thinking sections.
@@ -428,56 +468,35 @@ async def fetch_and_process_url(url: str, debug_container) -> str:
 def clean_json_string(json_str: str) -> str:
     """Clean a JSON string by removing invalid control characters and normalizing whitespace."""
     try:
-        # First try to parse it as is (in case it's already valid JSON)
-        json.loads(json_str)
-        return json_str
-    except:
-        # If parsing fails, clean up the string
-        # Remove JSON code block markers
-        json_str = re.sub(r'^```json\s*|\s*```$', '', json_str.strip())
+        # Remove any leading/trailing whitespace
+        json_str = json_str.strip()
         
-        # Handle newlines in the content while preserving them in strings
-        json_str = re.sub(r'\\n', '__NEWLINE__', json_str)  # Temporarily replace valid \n
-        json_str = re.sub(r'\n\s*', ' ', json_str)  # Remove actual newlines
-        json_str = re.sub(r'__NEWLINE__', '\\n', json_str)  # Restore valid \n
+        # Remove any markdown code block markers
+        json_str = re.sub(r'^```json\s*|\s*```$', '', json_str)
+        json_str = re.sub(r'^```\s*|\s*```$', '', json_str)
         
-        # Replace invalid control characters
-        json_str = re.sub(r'[\x00-\x09\x0b\x0c\x0e-\x1F\x7F-\x9F]', '', json_str)
+        # Replace any single quotes with double quotes
+        json_str = re.sub(r"(?<!\\)'", '"', json_str)
         
-        # Normalize whitespace (but not inside strings)
-        parts = []
-        in_string = False
-        current = []
+        # Handle escaped characters
+        json_str = json_str.encode('utf-8').decode('unicode-escape')
         
-        for char in json_str:
-            if char == '"' and (not current or current[-1] != '\\'):
-                in_string = not in_string
-            
-            if not in_string and char.isspace():
-                if current and not current[-1].isspace():
-                    current.append(' ')
-            else:
-                current.append(char)
+        # Remove any non-printable characters except valid whitespace
+        json_str = ''.join(char for char in json_str if char.isprintable() or char.isspace())
         
-        json_str = ''.join(current)
+        # Normalize whitespace between JSON structural elements
+        json_str = re.sub(r'\s+(?=[,\{\}\[\]])', '', json_str)
+        json_str = re.sub(r'(?<=[,\{\}\[\]])\s+', ' ', json_str)
         
-        # Ensure proper escaping of quotes
-        json_str = json_str.replace('\\"', '__QUOTE__')
-        json_str = json_str.replace('"', '\\"')
-        json_str = json_str.replace('__QUOTE__', '\\"')
-        
-        # Remove any trailing commas before closing braces/brackets
+        # Remove trailing commas
         json_str = re.sub(r',(\s*[}\]])', r'\1', json_str)
         
-        return json_str.strip() 
+        return json_str.strip()
+        
+    except Exception as e:
+        raise ValueError(f"Error cleaning JSON string: {str(e)}")
 
-
-# Function to write markdown file - wrapper to handle thinking sections correctly
-def write_markdown_file_with_thinking(file_path, content):
-    """Wrapper around write_markdown_with_thinking to maintain backward compatibility."""
-    return write_markdown_with_thinking(file_path, content)
-
-async def perform_web_search(search_tool, query, status_text):
+async def perform_web_search(search_tool, query, status_text=None):
     """
     Performs a web search using the provided search tool and processes the results.
     
@@ -492,13 +511,17 @@ async def perform_web_search(search_tool, query, status_text):
     detailed_results = []
     
     try:
+        # print(f"function perform_web_search - Query: {query}")
         search_results = search_tool.run(query)
+        # print(f"function perform_web_search - Search results: {search_results}")
         urls = re.findall(r'https?://[^\s<>"]+|www\.[^\s<>"]+', search_results)
-        status_text.text(f"Found URLs from search: {urls}")
+        if status_text!=None:
+            status_text.text(f"Found URLs from search: {urls}")
         
         for url in urls:
             try:
-                status_text.text(f"Processing URL: {url}")
+                if status_text!=None:
+                    status_text.text(f"Processing URL: {url}")
                 content = await fetch_and_process_url(url, status_text)
                 if content:
                     detailed_results.append({
@@ -507,10 +530,12 @@ async def perform_web_search(search_tool, query, status_text):
                         "source": "web"
                     })
             except Exception as e:
-                status_text.warning(f"Error processing URL {url}: {str(e)}")
+                if status_text!=None:
+                    status_text.warning(f"Error processing URL {url}: {str(e)}")
                 
     except Exception as e:
-        status_text.warning(f"Web search error: {str(e)}")
+        if status_text!=None:
+            status_text.warning(f"Web search error: {str(e)}")
         
     return detailed_results
 
@@ -600,4 +625,93 @@ async def perform_arxiv_search(search_tool, query, status_text):
         status_text.warning(f"arXiv search error: {str(e)}")
         
     return detailed_results
+
+async def synthesize_search_results(results, llm, topic, status_text):
+    """
+    Synthesizes and validates web search results using the LLM.
+    
+    Args:
+        results: List of search results
+        llm: The language model to use for evaluation
+        topic: The search topic
+        status_text: Streamlit text element for status updates
+        
+    Returns:
+        dict: Synthesized results with confidence scores and correlations
+    """
+    try:
+        # Format results for evaluation
+        formatted_results = "\n\n".join([
+            f"Source: {result['url']}\nContent: {result['content'][:1000]}..."  # Truncate for reasonable context
+            for result in results
+        ])
+        
+        status_text.text("Evaluating search results correlation and confidence...")
+        evaluation = llm.invoke(SEARCH_RESULTS_EVALUATION_TEMPLATE.format(
+            topic=topic,
+            results=formatted_results
+        ))
+        
+        try:
+            # Clean and parse JSON response
+            cleaned_json = clean_json_string(evaluation)
+            # Add fallback if JSON is not properly formatted
+            if not cleaned_json.startswith('{'):
+                # Try to extract JSON from the response
+                json_match = re.search(r'\{[\s\S]*\}', cleaned_json)
+                if json_match:
+                    cleaned_json = json_match.group(0)
+                else:
+                    raise ValueError("No valid JSON found in response")
+            
+            evaluation_data = json.loads(cleaned_json)
+            
+            # Validate required fields
+            required_fields = ['sufficient_data', 'quality_score', 'confidence_score', 
+                             'source_correlation', 'source_credibility']
+            missing_fields = [field for field in required_fields if field not in evaluation_data]
+            
+            if missing_fields:
+                raise ValueError(f"Missing required fields: {', '.join(missing_fields)}")
+            
+            # If confidence is too low, try to get additional context
+            if evaluation_data['confidence_score'] < 7 and len(results) < 5:
+                status_text.warning("Confidence score low - gathering additional sources...")
+                return {
+                    "needs_more_sources": True,
+                    "evaluation": evaluation_data
+                }
+            
+            # Format the synthesized response
+            synthesis = {
+                "confidence": evaluation_data['confidence_score'],
+                "quality": evaluation_data['quality_score'],
+                "corroborated_facts": evaluation_data.get('source_correlation', {}).get('high_correlation', []),
+                "credible_sources": evaluation_data.get('source_credibility', {}).get('high_credibility', []),
+                "evaluation": evaluation_data,
+                "needs_more_sources": False
+            }
+            
+            return synthesis
+            
+        except json.JSONDecodeError as e:
+            status_text.error(f"Error parsing evaluation results: {str(e)}\nResponse: {evaluation[:200]}...")
+            # Provide a fallback response
+            return {
+                "confidence": 5,
+                "quality": 5,
+                "corroborated_facts": ["Unable to parse detailed results"],
+                "credible_sources": [],
+                "evaluation": {
+                    "sufficient_data": False,
+                    "quality_score": 5,
+                    "confidence_score": 5,
+                    "reasons": ["Error parsing LLM response"]
+                },
+                "needs_more_sources": True
+            }
+            
+    except Exception as e:
+        status_text.error(f"Error synthesizing results: {str(e)}")
+        return None
 

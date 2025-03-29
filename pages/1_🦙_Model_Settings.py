@@ -2,6 +2,9 @@ import streamlit as st
 import ollama
 from langchain_ollama import OllamaLLM
 
+DEFAULT_MODEL_PROMPT = """You are a helpful AI assistant. You are given a question and a context.
+You need to answer the question based on the context. If there isn't relevant information in the context, you should answer to the best of your knowledge."""
+
 def update_ollama_model():
     """Updates the list of available Ollama models."""
     ollama_models = ollama.list()
@@ -39,7 +42,22 @@ def update_main_ollama_model():
                 temperature=st.session_state.temperature,
                 num_predict=int(st.session_state.newMaxTokens),
                 num_ctx=int(st.session_state.contextWindow),
+                top_k=int(st.session_state.top_k),
+                top_p=float(st.session_state.top_p),
+                verbose=st.session_state.verbose
             )
+
+            st.session_state.llm_websearch = OllamaLLM(
+                model=st.session_state.ollama_model,
+                temperature=st.session_state.temperature,
+                num_predict=int(st.session_state.newMaxTokens),
+                num_ctx=int(st.session_state.contextWindow),
+                top_k=int(st.session_state.top_k),
+                top_p=float(st.session_state.top_p),
+                verbose=st.session_state.verbose,
+                format="json"
+            )
+
             # Warmup with a simple prompt
             st.session_state.llm.invoke("Hello")
             st.success("Model settings applied successfully!")
@@ -131,8 +149,17 @@ if 'newMaxTokens' not in st.session_state:
 if 'temperature' not in st.session_state:
     st.session_state.temperature = 0.7
 
+if 'top_k' not in st.session_state:
+    st.session_state.top_k = 40
+
+if 'top_p' not in st.session_state:
+    st.session_state.top_p = 0.9
+
+if 'verbose' not in st.session_state:
+    st.session_state.verbose = False
+
 if 'system_prompt' not in st.session_state:
-    st.session_state.system_prompt = "You are a helpful AI assistant."
+    st.session_state.system_prompt = DEFAULT_MODEL_PROMPT
 
 if 'chatReady' not in st.session_state:
     st.session_state.chatReady = False
@@ -281,7 +308,42 @@ with tab2:
     )
     st.session_state.temperature = temperature
     
+    # Advanced Parameters
+    st.divider()
+    st.subheader("Advanced Parameters")
+    adv_col1, adv_col2 = st.columns(2)
+    
+    with adv_col1:
+        top_k = st.number_input(
+            "Top K",
+            min_value=0,
+            max_value=100,
+            value=st.session_state.top_k,
+            help="Limits the cumulative probability of tokens considered for sampling (0 = disabled)"
+        )
+        st.session_state.top_k = top_k
+        
+        top_p = st.number_input(
+            "Top P",
+            min_value=0.0,
+            max_value=1.0,
+            value=st.session_state.top_p,
+            step=0.05,
+            format="%.2f",
+            help="Nucleus sampling threshold (0.0-1.0)"
+        )
+        st.session_state.top_p = top_p
+    
+    with adv_col2:
+        verbose = st.checkbox(
+            "Verbose Mode",
+            value=st.session_state.verbose,
+            help="Enable detailed logging of model operations"
+        )
+        st.session_state.verbose = verbose
+    
     # System prompt
+    st.divider()
     system_prompt = st.text_area(
         "System Prompt",
         value=st.session_state.system_prompt,

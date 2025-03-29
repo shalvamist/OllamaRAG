@@ -2,6 +2,7 @@ import streamlit as st
 import time
 import re
 import os
+from langchain_community.tools import DuckDuckGoSearchResults
 from pipelines.defaultRAG import generate_response
 from CommonUtils.rag_utils import ( 
     SOURCE_PATH,
@@ -22,7 +23,9 @@ from CommonUtils.research_utils import (
     parse_thinking_content,
     THINKING_SECTION_TEMPLATE,
     THINKING_CSS,
-    perform_web_search
+    perform_web_search,
+    synthesize_search_results,
+    WEBSEARCH_QUERY_TEMPLATE,
 )
 
 # Initialize session state variables
@@ -518,17 +521,56 @@ else:
                 # Add web search if enabled
                 web_results = []
                 if st.session_state.web_search_enabled:
-                    with st.spinner("Searching the web..."):
-                        try:
-                            from langchain_community.utilities import DuckDuckGoSearchAPIWrapper
-                            search = DuckDuckGoSearchAPIWrapper()
-                            results = search.run(cleaned_prompt)
-                            if results:
-                                web_results = [{"url": "DuckDuckGo Search", "content": results}]
-                                web_context = results
-                                cleaned_prompt = f"Web search results:\n{web_context}\n\nUser question: {cleaned_prompt}"
-                        except Exception as e:
-                            st.warning(f"Web search failed: {str(e)}")
+                    async def process_web_search():
+                        with st.spinner("Searching the web..."):
+                            try:
+                                # Generate search query
+                                search_query = st.session_state.llm.invoke(WEBSEARCH_QUERY_TEMPLATE.format(topic=cleaned_prompt))
+                                
+                                # Perform web search
+                                DDG_web_tool = DuckDuckGoSearchResults()
+                                DDG_news_tool = DuckDuckGoSearchResults(backend="news")
+
+                                web_results = []
+                                web_results = await perform_web_search(DDG_web_tool, search_query, None)
+                                web_results.extend(await perform_web_search(DDG_news_tool, search_query, None))
+
+                                if web_results:
+                                    # Synthesize and validate results
+                                    synthesis = await synthesize_search_results(
+                                        web_results,
+                                        st.session_state.llm_websearch,
+                                        cleaned_prompt,
+                                        st.empty()
+                                    )
+                                    
+                                    if synthesis:
+                                        if synthesis["needs_more_sources"]:
+                                            # Get additional sources if confidence is low
+                                            st.warning("Web search results are not sufficient. Please provide additional sources.")
+                                        
+                                        # Add synthesis information to prompt
+                                        web_context = f"""Web search results with confidence {synthesis['confidence']}/10:
+                                        
+                                        Corroborated facts:
+                                        {chr(10).join('- ' + fact for fact in synthesis['corroborated_facts'])}
+                                        
+                                        From credible sources:
+                                        {chr(10).join('- ' + source for source in synthesis['credible_sources'])}
+                                        
+                                        Raw search results:
+                                        {web_results}"""
+                                        
+                                        return f"Web search results:\n{web_context}\n\nUser question: {cleaned_prompt}"
+                                return None
+                            except Exception as e:
+                                st.warning(f"Web search failed: {str(e)}")
+                                return None
+                    
+                    import asyncio
+                    web_search_result = asyncio.run(process_web_search())
+                    if web_search_result:
+                        cleaned_prompt = web_search_result
                 
                 # Stream the response
                 for chunk in generate_response(
