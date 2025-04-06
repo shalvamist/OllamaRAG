@@ -38,6 +38,7 @@ from CommonUtils.research_utils import (
     perform_web_search,
     perform_google_search,
     perform_arxiv_search,
+    perform_wikipedia_search,
 )
 
 # Set page config
@@ -660,7 +661,7 @@ async def research_subtopic(subtopic, search_tools, synthesis_chain, main_topic,
             # Perform Wikipedia searches based on enabled providers
             if search_tools.get('wikipedia') and not st.session_state.stop_requested:
                 status_text.text("Performing Wikipedia search")
-                web_results = await perform_web_search(search_tools['wikipedia'], search_query, status_text)
+                web_results = await perform_wikipedia_search(search_tools['wikipedia'], search_query, status_text)
                 detailed_results.extend(web_results)
             
             # Perform arXiv searches based on enabled providers

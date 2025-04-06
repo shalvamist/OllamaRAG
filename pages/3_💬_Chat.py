@@ -536,6 +536,7 @@ else:
                                 web_results.extend(await perform_web_search(DDG_news_tool, search_query, None))
 
                                 if web_results:
+                                    synthesis = []
                                     # Synthesize and validate results
                                     synthesis = await synthesize_search_results(
                                         web_results,

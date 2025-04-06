@@ -231,7 +231,8 @@ REQUIRED JSON STRUCTURE:
     "missing_aspects": [
         "Missing aspect 1",
         "Missing aspect 2"
-    ]
+    ],
+    "answer": "Answer to the query based on the search results"
 }}
 
 RESPONSE (VALID JSON ONLY):"""
@@ -411,22 +412,13 @@ def write_markdown_with_thinking(file_path, content):
 
 async def fetch_and_process_url(url: str, debug_container) -> str:
     """Fetch and process content from a URL using WebBaseLoader with BeautifulSoup strainer."""
-    try:       
-        if 'stop_requested' in st.session_state and st.session_state.stop_requested:
-            debug_container.warning(f"Skipping URL processing - research stopped: {url}")
-            return ""
-        
+    try:              
         # Initialize WebBaseLoader with BeautifulSoup configuration
         loader = WebBaseLoader(
             [url]
         )
 
-        try:
-            # Check again if research has been stopped before potentially lengthy operation
-            if 'stop_requested' in st.session_state and st.session_state.stop_requested:
-                debug_container.warning(f"Skipping content loading - research stopped: {url}")
-                return ""
-                
+        try:                
             # Use synchronous loading as aload() might not work well with bs_kwargs
             docs = loader.load()
                 
@@ -445,15 +437,16 @@ async def fetch_and_process_url(url: str, debug_container) -> str:
                     return ""
 
             # Combine all document content
-            content = "\n\n".join(doc.page_content for doc in docs)
+            content = "\n\n".join(doc.page_content.strip() for doc in docs)
             
             # Clean up the content
             content = re.sub(r'\s+', ' ', content).strip()  # Remove excessive whitespace
             content = re.sub(r'[^\x00-\x7F]+', '', content)  # Remove non-ASCII characters
-            
+
             # Display success message
-            debug_container.success(f"Content retrieved from: {url}")
-            debug_container.empty()
+            if debug_container!=None:
+                debug_container.success(f"Content retrieved from: {url}")
+                debug_container.empty()
             
             return content
 
@@ -496,6 +489,38 @@ def clean_json_string(json_str: str) -> str:
     except Exception as e:
         raise ValueError(f"Error cleaning JSON string: {str(e)}")
 
+async def perform_wikipedia_search(search_tool, query, status_text=None):
+    """
+    Performs a Wikipedia search using the provided search tool and processes the results.
+    
+    Args:
+        search_tool: The search tool to use (e.g., DuckDuckGo)
+        query: The search query
+        status_text: Streamlit text element for status updates
+        
+    Returns:
+        list: List of dictionaries containing processed search results
+    """
+    content = search_tool.run(query)
+    detailed_results = []
+    try:
+        if content!=None:
+            status_text.text(f"Processing Wikipedia Search Results")
+
+        if content:
+            detailed_results.append({
+                "url": "None",
+                "content": content,
+                "source": "wikipedia"
+            })
+
+                
+    except Exception as e:
+        if status_text!=None:
+            status_text.warning(f"Wikipedia search error: {str(e)}")
+        
+    return detailed_results
+
 async def perform_web_search(search_tool, query, status_text=None):
     """
     Performs a web search using the provided search tool and processes the results.
@@ -511,9 +536,7 @@ async def perform_web_search(search_tool, query, status_text=None):
     detailed_results = []
     
     try:
-        # print(f"function perform_web_search - Query: {query}")
         search_results = search_tool.run(query)
-        # print(f"function perform_web_search - Search results: {search_results}")
         urls = re.findall(r'https?://[^\s<>"]+|www\.[^\s<>"]+', search_results)
         if status_text!=None:
             status_text.text(f"Found URLs from search: {urls}")
@@ -639,78 +662,91 @@ async def synthesize_search_results(results, llm, topic, status_text):
     Returns:
         dict: Synthesized results with confidence scores and correlations
     """
+    synthesis_results = []
     try:
-        # Format results for evaluation
-        formatted_results = "\n\n".join([
-            f"Source: {result['url']}\nContent: {result['content'][:1000]}..."  # Truncate for reasonable context
-            for result in results
-        ])
+        for result in results:
+            # Format results for evaluation
+            formatted_results = "\n\n".join([
+                f"Source: {result['url']}\nContent: {result['content']}"  # Truncate for reasonable context
+            ])
         
-        status_text.text("Evaluating search results correlation and confidence...")
-        evaluation = llm.invoke(SEARCH_RESULTS_EVALUATION_TEMPLATE.format(
-            topic=topic,
-            results=formatted_results
-        ))
+            status_text.text("Evaluating search results correlation and confidence...")
+            evaluation = llm.invoke(SEARCH_RESULTS_EVALUATION_TEMPLATE.format(
+                topic=topic,
+                results=formatted_results
+            ))
         
-        try:
-            # Clean and parse JSON response
-            cleaned_json = clean_json_string(evaluation)
-            # Add fallback if JSON is not properly formatted
-            if not cleaned_json.startswith('{'):
-                # Try to extract JSON from the response
-                json_match = re.search(r'\{[\s\S]*\}', cleaned_json)
-                if json_match:
-                    cleaned_json = json_match.group(0)
-                else:
-                    raise ValueError("No valid JSON found in response")
-            
-            evaluation_data = json.loads(cleaned_json)
-            
-            # Validate required fields
-            required_fields = ['sufficient_data', 'quality_score', 'confidence_score', 
-                             'source_correlation', 'source_credibility']
-            missing_fields = [field for field in required_fields if field not in evaluation_data]
-            
-            if missing_fields:
-                raise ValueError(f"Missing required fields: {', '.join(missing_fields)}")
-            
-            # If confidence is too low, try to get additional context
-            if evaluation_data['confidence_score'] < 7 and len(results) < 5:
-                status_text.warning("Confidence score low - gathering additional sources...")
+            try:
+                # Clean and parse JSON response
+                cleaned_json = clean_json_string(evaluation)
+                # Add fallback if JSON is not properly formatted
+                if not cleaned_json.startswith('{'):
+                    # Try to extract JSON from the response
+                    json_match = re.search(r'\{[\s\S]*\}', cleaned_json)
+                    if json_match:
+                        cleaned_json = json_match.group(0)
+                    else:
+                        raise ValueError("No valid JSON found in response")
+                
+                evaluation_data = json.loads(cleaned_json)
+                
+                # Validate required fields
+                required_fields = ['sufficient_data', 'quality_score', 'confidence_score', 
+                                'source_correlation', 'source_credibility']
+                missing_fields = [field for field in required_fields if field not in evaluation_data]
+                
+                if missing_fields:
+                    raise ValueError(f"Missing required fields: {', '.join(missing_fields)}")
+                
+                # If confidence is too low, try to get additional context
+                if evaluation_data['confidence_score'] < 6:
+                    if status_text!=None:
+                        status_text.warning("Confidence score low - gathering additional sources...")
+                    continue
+                
+                # Format the synthesized response
+                synthesis_results.append({
+                    "confidence": evaluation_data['confidence_score'],
+                    "quality": evaluation_data['quality_score'],
+                    "corroborated_facts": evaluation_data.get('source_correlation', {}).get('high_correlation', []),
+                    "credible_sources": evaluation_data.get('source_credibility', {}).get('high_credibility', []),
+                    "evaluation": evaluation_data,
+                    "needs_more_sources": False,
+                    "answer": evaluation_data['answer']
+                })
+                
+                
+            except json.JSONDecodeError as e:
+                status_text.error(f"Error parsing evaluation results: {str(e)}\nResponse: {evaluation[:200]}...")
+                # Provide a fallback response
                 return {
-                    "needs_more_sources": True,
-                    "evaluation": evaluation_data
+                    "confidence": 5,
+                    "quality": 5,
+                    "corroborated_facts": ["Unable to parse detailed results"],
+                    "credible_sources": [],
+                    "evaluation": {
+                        "sufficient_data": False,
+                        "quality_score": 5,
+                        "confidence_score": 5,
+                        "reasons": ["Error parsing LLM response"]
+                    },
+                    "needs_more_sources": True
                 }
-            
-            # Format the synthesized response
-            synthesis = {
-                "confidence": evaluation_data['confidence_score'],
-                "quality": evaluation_data['quality_score'],
-                "corroborated_facts": evaluation_data.get('source_correlation', {}).get('high_correlation', []),
-                "credible_sources": evaluation_data.get('source_credibility', {}).get('high_credibility', []),
-                "evaluation": evaluation_data,
-                "needs_more_sources": False
-            }
-            
-            return synthesis
-            
-        except json.JSONDecodeError as e:
-            status_text.error(f"Error parsing evaluation results: {str(e)}\nResponse: {evaluation[:200]}...")
-            # Provide a fallback response
-            return {
-                "confidence": 5,
-                "quality": 5,
-                "corroborated_facts": ["Unable to parse detailed results"],
-                "credible_sources": [],
-                "evaluation": {
-                    "sufficient_data": False,
-                    "quality_score": 5,
-                    "confidence_score": 5,
-                    "reasons": ["Error parsing LLM response"]
-                },
-                "needs_more_sources": True
-            }
-            
+
+        report = ""
+        for result in synthesis_results:
+            if result["needs_more_sources"]:
+                continue
+            else:
+                report+=f"Answer: {result['answer']}\n\nConfidence: {result['confidence']}\n\nQuality: {result['quality']}\n\nCorroborated Facts: {result['corroborated_facts']}\n\nCredible Sources: {result['credible_sources']}\n\n"
+
+        evaluation = llm.invoke(SEARCH_RESULTS_EVALUATION_TEMPLATE.format(
+                topic=topic,
+                results=report
+            ))
+
+        return evaluation
+
     except Exception as e:
         status_text.error(f"Error synthesizing results: {str(e)}")
         return None
